@@ -46,8 +46,36 @@ var SPE = (function () {
 		this.marked_as_noise = [];
 		// useful constants
 		this.string_line_seperator = "\n" + Array(40).join("-") + "\n";
-		this.matrix_sp_width = 100;//300;
-		this.matrix_sp_heigh = 100;//300;
+		this.matrix_sp_min_width = 300;
+		this.matrix_sp_min_height = 250;
+		// 2x 1em margin + 2x 1px border + scrollbar -0.2em last col border = 32px + 2px + 13px  - 3.2px = 44px may depened on browser - I use chrome 
+		this.canvas_window_subtraction_width = 44;
+		// 2x 1em margin + menu height = 32px + 50px = 82px
+		this.canvas_window_subtraction_height = 82;	
+		this.body_structure = ["loader", "select-data-files", "canvas"];
+		this.menu_options = [
+								[
+									"Scatter Plot Explorer", null
+								],[
+									"List",	[], "menu-list"
+								],[
+									"Regenerate",	[
+														["Measurements", "menu-data-select"]
+													],
+									"menu-restart-palceholder"
+								],[
+									"Cluster",		[
+														["Matrix", "menu-matrix-cluster" ],
+														["In-line", "menu-inline-cluster" ]
+													],
+									"menu-cluster"
+								],[
+									"Scatter Plot", [], "menu-sp"
+								]
+							];
+		this.logo_sp = [[35, 307], [34, 307], [22, 307], [135, 244], [51, 265], [74, 244], [57, 254], [282, 43], [49, 275], [125, 233], [71, 233], [23, 307], [165, 233], [60, 254], [67, 233], [44, 286], [281, 65], [43, 286], [41, 286], [24, 307], [28, 286], [30, 297], [77, 233], [110, 233], [33, 297], [32, 307], [65, 254], [62, 265], [46, 275], [274, 212], [282, 75], [101, 233], [281, 54], [189, 244], [27, 297], [58, 265], [240, 233], [29, 297], [75, 233], [281, 128], [280, 170], [83, 223], [69, 244], [61, 254], [30, 307], [47, 265], [53, 265], [48, 275], [55, 254], [281, 43], [46, 286], [39, 297], [81, 233], [89, 244], [281, 33], [25, 297], [36, 307], [23, 297], [68, 244], [278, 191], [56, 265], [54, 275], [34, 297], [59, 254], [37, 297], [281, 22], [79, 244], [38, 297], [64, 254], [31, 307], [45, 286], [68, 254], [36, 297], [281, 117], [50, 275], [94, 233], [148, 254], [73, 233], [26, 307], [282, 65], [63, 265], [40, 297], [76, 244], [267, 233], [42, 286], [66, 244], [25, 307], [27, 318]];
+		this.logo_mg = "<path fill='none' stroke='#000' stroke-width='36' stroke-linecap='round' d='m280,278a153,153 0 1,0-2,2l170,170m-91-117 110,110-26,26-110-110'/>"
+		this.logo_dim = 490;		
 		// tests done with min cluster size 5
 		this.tested_eps = {
 			"corr.fv": "0.0015",	// 44 clusters of AVG size 560 and 0.1% marked as noise
@@ -215,12 +243,61 @@ var SPE = (function () {
 	}
 
 	// ---
+	// Description: Generate basic div structure in body
+	// ---
+	SPE.prototype.generateBodyStructure = function(){
+		// as a start remove all inside body
+		d3.selectAll("body > *").remove();
+		// append badic div structure
+		d3.select("body").selectAll("div").data(this.body_structure)
+			.enter().append("div").attr("id", function(d){ return d;})
+	}
+
+	// ---
+	// Description: Generate navigation menu
+	// ---
+	SPE.prototype.generateMenu = function(){
+		// as a start remove previous menu if exists
+		d3.selectAll("nav").remove();
+		// create nav as first child of body
+		var menu = d3.select("body").insert("nav",":first-child").append("ul");
+		menu.selectAll("li").data(this.menu_options)
+			.enter().append("li").classed("menu-option", function(d){ return d[1] != null;})
+				.html(function(menuItem){
+					var submenu = "";
+					if(menuItem[1] != null){
+						// generate submenu
+						submenu += "<ul id='"+ menuItem[2] +"'>";
+						if(menuItem[1].length > 0){
+							for(var sub=0; sub < menuItem[1].length; sub++){
+								submenu += "<li id='" + menuItem[1][sub][1]+ "' class='menu-option'>"+menuItem[1][sub][0]+"</li>";
+							}
+						}
+						submenu += "</ul>";
+					}
+					return menuItem[0] + submenu;
+		});
+
+		// draw logo
+		// need scales since using actual SP data
+		scaleX = d3.scaleLinear().domain([0, 305]).range([0, this.logo_dim]);
+		scaleY = d3.scaleLinear().domain([0, 341]).range([0, this.logo_dim]);
+		var logo = menu.insert("svg",":first-child").attr("width", this.logo_dim + 250).attr("height", this.logo_dim + 110);
+		// append
+		logo.append("g").attr("id","logo-sp").selectAll("circle").data(this.logo_sp)
+			.enter().append("circle")
+				.attr("cx", function(d){ return scaleX(d[0]);})
+				.attr("cy", function(d){ return scaleY(d[1]);});
+		logo.append("g").attr("id","logo-magnifying-glass").html(this.logo_mg);
+	}
+
+	// ---
 	// Description: Generate a form with 3 dropdowns to select the files to be used
 	// ---
 	SPE.prototype.selectDataGUI = function(){
 		var self = this;
 		// failsafe to remove all objects
-		this.clearGeneratedElements();
+		this.clearGeneratedElements();testM[m]
 		// generate dropdowns
 		d3.select("#select-data-files").selectAll("select")
 			.data([this.label_files, this.raw_files, this.fv_files])
@@ -300,10 +377,6 @@ var SPE = (function () {
 			this.measurements[m] = new Measurement(labelArray[m], rawArray[m], fvArray[m]);
 		}
 		this.generateLoaderMessage("Measurements prepared");
-		var testMat = [];
-		for(var m=0; m < 10; m++){
-			testMat[m] = this.measurements[m];
-		}
 		// for loading message
 		this.generateLoaderMessage("DBSCAN");
 		var self = this;
@@ -603,7 +676,7 @@ var SPE = (function () {
 	// ---
 	// Description: Using the measurement plots the scatter plot as selector child
 	// ---
-	SPE.prototype.plotScatterPlot = function(selector, measurement, width, height, showDetails){
+	SPE.prototype.plotScatterPlot = function(selector, measurement, width, height, showDetails, onClickFun){
 		// since we want all points inside the canvas, we need a padding
 		var padding = d3.min([0.075 * width, 0.075 * height]);
 		// set the scale functons to map the points to given canvas
@@ -613,9 +686,11 @@ var SPE = (function () {
 		var scaleY = d3.scaleLinear().domain([measurement.minY, measurement.maxY]).range([height - padding, padding]);
 		// the actual SVG parts
 		var svg = selector.append("svg")
-			.attr("id", measurement.doi)
+			.attr("id", "Cluster:"+ measurement.dbscan_cluster + " " + measurement.doi)
 			.attr("width", width)
 			.attr("height",height);
+		// append bg
+		svg.append("rect").attr("width", width).attr("height",height);
 		var plotGroup =	svg.selectAll("g").data(measurement.pairs)
 			.enter().append("g").attr("class", "pointGroup").attr("id", function(d,i){
 				return measurement.doi + "["+i+"]";
@@ -633,6 +708,7 @@ var SPE = (function () {
 					else return 1;						// a is the hovered element, bring "a" to the front
 				})});
 		if(showDetails){
+			svg.classed("detail", true);
 			plotGroup.append("text")
 					.text(function(pair){return pair.join(",")})
 					.attr("x", function(pair){return scaleX(measurement.getX(pair));})
@@ -661,21 +737,57 @@ var SPE = (function () {
 				.attr("y", padding*0.25)
 				.text(measurement.doi);
 		}
+		// check if function
+		if(this.checkFunctionType(onClickFun)){
+			// call function with measure as parameter - may be ignored
+			svg.on("click", function(){ var element = this; onClickFun(element, measurement);});
+		}
 	}
 
 	// ---
 	// Description: Using the measurement plots the scatter plot as selector child
 	// ---
-	SPE.prototype.plotScatterPlotMatrix = function(selector, measurements, width, height, maxCols, maxRows, showDetails){
-		var margin = 10; // 2x 1px border + 2x 0.2em margin in CSS
-		var cols = d3.min([measurements.length, maxCols]);
-		var rows = d3.min([Math.ceil(measurements.length / cols), maxRows]);
-		var sp_width = Math.floor((width - margin * (cols + 1)) / cols);
-		var sp_height = Math.floor((height - margin * (rows + 1)) / rows);
-		//console.log(sp_width, sp_height, margin)
-		for(var m=0; m < measurements.length; m++){
-			this.plotScatterPlot(selector, measurements[m], sp_width, sp_height, showDetails);
+	SPE.prototype.plotScatterPlotMatrix = function(selector, measurements, width, height, showDetails, onClickFun){
+		var border = 3.2; // == 0.2em right/bottom border of svg
+		var max_cols = Math.floor(width / (this.matrix_sp_min_width + border));
+		var max_rows = Math.floor(height / (this.matrix_sp_min_height + border));
+		// as a guideline we want more rows than cols
+		// also there can only be 1 more rows than cols
+		if(max_rows > max_cols + 1){
+			max_rows = max_cols + 1;
 		}
+		// start with 1,1 dimansion matrix and grow it following hte guidelines
+		var cols = 1, rows = 1;
+		while(cols * rows < measurements.length && (cols < max_cols || rows < max_rows)){
+			if(cols + 1 > rows && rows < max_rows || cols == max_cols){
+				rows++;
+			}
+			else if(cols < max_cols){
+				cols++;
+			}
+		}
+		//console.log("Rows " + rows + "/" + max_rows + " Cols " + cols + "/" + max_cols);
+
+		var sp_width = width / cols - 2*border;
+		var sp_height = height / rows - 2*border;
+		for(var m=0; m < measurements.length; m++){
+			this.plotScatterPlot(selector, measurements[m], sp_width, sp_height, showDetails, onClickFun);
+		}
+	}
+
+	// ---
+	// Description: helper to check if function is really a function
+	// ---
+	SPE.prototype.checkFunctionType = function(functionToCheck){
+		var getType = {};
+ 		return functionToCheck && getType.toString.call(functionToCheck) === '[object Function]';	
+	}
+
+	// ---
+	// Description: calculate current canvas size
+	// ---
+	SPE.prototype.calculateCanvasDim = function(){
+		return [window.innerWidth - this.canvas_window_subtraction_width, window.innerHeight - this.canvas_window_subtraction_height];
 	}
 
 	// ---
@@ -686,15 +798,30 @@ var SPE = (function () {
 		for(var c=0; c<this.clusters.length; c++){
 			represantatives.push(this.measurements[this.clusters[c].center_index]);
 		}
+		var canvasDim = this.calculateCanvasDim();
+		var self = this;
+		this.plotScatterPlotMatrix(d3.select("#canvas"), represantatives, canvasDim[0], canvasDim[1], false, function(element, m){
+			// cluster id is also cluster index in cluster of clusters, while cluster list is sorted
+			var cluster_id = parseInt(element.id.split(" ")[0].split(":")[1]);
+			self.clearGeneratedElements();
+			self.plotClusterAsMatrix(self.cluster_of_clusters.getMember(cluster_id));
+		});
+	}
 
-		var margin = 8;
-		var width = window.innerWidth-2*margin;
-		var height = window.innerHeight-2*margin;
-		var max_cols = Math.floor(width / this.matrix_sp_width);
-		var max_rows = Math.floor(height / this.matrix_sp_heigh);
-		console.log("maxCols " + max_cols + " maxRows " + max_rows)
-
-		this.plotScatterPlotMatrix(d3.select("#canvas"), represantatives, width, height, max_cols, max_rows)
+	// ---
+	// Description: use given cluster to plot a matrix of cluster scatter plots
+	// ---
+	SPE.prototype.plotClusterAsMatrix = function(cluster){
+		var measurements = [];
+		for(var m=0; m<cluster.size; m++){
+			measurements.push(this.measurements[cluster.getMember(m)]);
+		}
+		var canvasDim = this.calculateCanvasDim();
+		var self = this;
+		this.plotScatterPlotMatrix(d3.select("#canvas"), measurements, canvasDim[0], canvasDim[1], false, function(element, m){
+			self.clearGeneratedElements();
+			self.plotScatterPlot(d3.select("#canvas"), m, canvasDim[0], canvasDim[1], true, null);
+		});
 	}
 
 	return SPE;
@@ -769,11 +896,18 @@ var Cluster = (function () {
 	}
 
 	// ---
-	// Description: Add Measurement to cluster.
+	// Description: Add Measurement index to cluster.
 	// ---
 	Cluster.prototype.addMember = function(index){
 		this.member_indicies.push(index);
 		this.size++;
+	}
+
+	// ---
+	// Description: Get Measurement index from cluster.
+	// ---
+	Cluster.prototype.getMember = function(index){
+		return this.member_indicies[index];
 	}
 
 	// ---

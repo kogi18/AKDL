@@ -1,0 +1,121 @@
+body{
+	margin: 0;
+	padding: 0;
+}
+
+/* menu */
+nav{
+	background-color: #2BBBD8;
+	color: #FCD271;
+	font-size: 20px;
+	border-bottom: 1px solid #102E37;
+	margin-bottom: 1em;
+}
+
+nav ul {
+    list-style-type: none;
+    margin: 0;
+    padding: 0;
+}
+nav > ul{
+    padding-left: 50px;
+}
+
+nav li.menu-option {
+	cursor: pointer;
+	color: #FFFFFF;
+}
+
+/*dropdown activator*/
+nav > ul > li {
+   	display: inline-block;
+	position: relative;
+	margin: 0.85em 1em;
+}
+
+/*dropdown content*/
+nav > ul > li > ul{
+	display: none;
+	position: absolute;
+	background-color: #E8EDE0;
+	border: 1px solid #102E37;
+	box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+}
+
+nav > ul > li:hover > ul{
+	display: block;
+}
+
+nav > ul > li > ul li.menu-option{
+	padding: 5px;
+	color: #F78D3F;
+}
+
+nav svg {
+	transform: scale(0.08) translate(-240em, -170em);
+	position: absolute;
+
+}
+
+nav svg g circle {
+	r: 15;
+	fill: #102E37;
+}
+
+nav svg #logo-magnifying-glass path {
+	stroke: #FCD271;
+	transform: translate(12em,5em);
+}
+
+
+/* SVG PLOTS */
+
+#canvas{
+	padding: 0;
+	margin: 1em;
+	margin-top: 0;
+	border: 1px solid #102E37;
+	max-height: 90vh;
+	overflow-y: scroll;
+	overflow-x: hidden;
+}
+
+#canvas svg{
+    vertical-align:	top;
+	border-right: 0.2em solid #FCD271;
+	border-bottom: 0.2em solid #FCD271;
+}
+
+#canvas svg .pointGroup text {
+	display: none;
+	fill: #102E37;
+	font-size: 1.5em;
+}
+
+
+#canvas svg circle {
+	r: 8;
+	fill: #F78D3F;
+}
+
+#canvas svg.detail circle:hover {
+	fill: #2BBBD8;
+}
+
+#canvas svg.detail circle:hover ~ text {
+	display: block;
+}
+
+#canvas svg rect{
+	fill: #E8EDE0;
+}
+
+#canvas svg:not(.detail):hover rect{
+	fill: #2BBBD8;
+}
+
+#canvas svg:not(.detail):hover circle{
+	fill: #FCD271;
+}
+
+

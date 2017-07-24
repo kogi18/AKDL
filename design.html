@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="UTF-8">
+		<title>Scatter Plot Explorer</title>
+
+		<link rel="stylesheet" type="text/css" href="css/spe.css">
+
+		<!-- D3.js for the bridge between DOM and DATA -->
+		<script src="js/d3.min.js"></script>
+		<!--	TO CONNECT TO LATEST SCRIPT ONLINE
+		<script src="https://d3js.org/d3.v4.min.js"></script>
+		-->
+
+		<!-- SPE engine -->
+		<script src="js/spe.js"></script>
+		<script type="text/javascript">
+			window.onload = function(){
+				spe = new SPE();
+				// prepare page
+				spe.generateBodyStructure();
+				spe.generateMenu();
+
+				// prepare dummy data for design development
+				testM = [];
+				testC = [];
+				var distF = function(a,b){return spe.measurementDistance(a,b)};
+				for(var m=0; m<15; m++){
+					var pairs = []
+					for(var p=0; p < 20; p++){
+						pairs.push([Math.random(), Math.random()]);
+					}
+					testM[m] = new Measurement(
+						{
+							id : m,
+							x_axis: "X",
+							y_axis: "Y",
+							doi: "DOI:" + m
+						},
+						{
+							id: m,
+							pairs: pairs
+						},
+						{
+							id: m,
+							src_filename: "NONE",
+							features: [m]
+						});
+					testC[m] = new Cluster(m);
+					for(var c=0; c <= m; c++){
+						testC[m].addMember(c);
+					}
+					testM[m].dbscan_cluster = testC[m].id;
+					spe.measurements = testM;
+					testC[m].findCenterMember(distF);
+					testC[m].findFarthestMember(distF);
+				}
+				spe.clusters = testC;
+				spe.prepareCenterCluster();
+				spe.plotRepresentativeMatrix();
+			}
+		</script>
+	</head>
+
+	<!-- if we wish to load a custom list - change the body id -->
+ 	<body id="fast.list">
+	</body>
+</html>
