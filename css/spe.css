@@ -13,7 +13,7 @@ nav{
 	color: #FCD271;
 	font-size: 20px;
 	border-bottom: 1px solid #102E37;
-	margin-bottom: 1em;
+	margin-bottom: 20px;
 }
 
 nav ul {
@@ -76,21 +76,31 @@ nav svg #logo-magnifying-glass path {
 
 #canvas, #form {
 	padding: 0;
-	margin: 1em;
-	margin-top: 0;
+	margin: 0 1em;
 	border: 1px solid #102E37;
 }
 
+#form{
+	margin-bottom: 1em;
+}
+
 #canvas{
-	max-height: 90vh;
-	overflow-y: scroll;
+	display: inline-block;
+	background-color: #FCD271;
+	box-sizing: border-box;
+	overflow-y: auto;
 	overflow-x: hidden;
 }
 
 #canvas svg{
     vertical-align:	top;
-	border-right: 0.2em solid #FCD271;
-	border-bottom: 0.2em solid #FCD271;
+    display: inline-block;
+    margin: 0;
+    padding: 0;
+}
+#canvas svg:not(.detail){
+	margin-right: 0.2em;
+	margin-bottom: 0.2em;
 }
 
 #canvas svg .pointGroup text {
@@ -122,7 +132,7 @@ nav svg #logo-magnifying-glass path {
 }
 
 #canvas svg:not(.detail):hover circle{
-	fill: #FCD271;
+	fill: #E8EDE0;
 }
 
 /* form element positioning*/
