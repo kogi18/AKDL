@@ -41,6 +41,7 @@ var SPE = (function () {
 		// clustering engine - DBSCAN
 		this.eps = 0;
 		this.min_region_size = 5;
+		this.selected_cluster_measurment_indices = [];
 		this.clusters = [];
 		this.cluster_of_clusters = null;
 		this.marked_as_noise = [];
@@ -52,7 +53,7 @@ var SPE = (function () {
 		this.canvas_window_subtraction_width = 44;
 		// 2x 1em margin + menu height = 32px + 50px = 82px
 		this.canvas_window_subtraction_height = 82;	
-		this.body_structure = ["loader", "select-data-files", "canvas"];
+		this.body_structure = ["loader", "form", "canvas"];
 		this.menu_options = [
 								[
 									"Scatter Plot Explorer", null
@@ -182,6 +183,8 @@ var SPE = (function () {
 		this.generateLoaderMessage(this.loadString());
 		if(this.label_load + this.raw_load + this.fv_load  == this.sp_file_count){
 			console.log("Finished load");
+			this.hideLoading(true);
+			this.hideMenu(false);
 			this.selectDataGUI();
 		}
 	}
@@ -250,9 +253,45 @@ var SPE = (function () {
 		d3.selectAll("body > *").remove();
 		// append badic div structure
 		d3.select("body").selectAll("div").data(this.body_structure)
-			.enter().append("div").attr("id", function(d){ return d;})
+			.enter().append("div")
+				.attr("id", function(d){ return d;})
+				.classed("hidden", true);
+		this.generateMenu();
+		d3.selectAll("nav").classed("hidden", true);
 	}
 
+	// ---
+	// Description: Switch selector visibility
+	// ---
+	SPE.prototype.hideElement = function(selector, hide){
+		selector.classed("hidden", hide);
+	}
+
+	// ---
+	// Description: Wrapper for simple menu hiding
+	// ---
+	SPE.prototype.hideMenu = function(hide){
+		this.hideElement(d3.selectAll("nav"), hide);
+	}
+
+	// ---
+	// Description: Wrapper for simple loading animation hiding
+	// ---
+	SPE.prototype.hideLoading = function(hide){
+		this.hideElement(d3.selectAll("#loader"), hide);
+	}
+	// ---
+	// Description: Wrapper for simple form hiding
+	// ---
+	SPE.prototype.hideForm = function(hide){
+		this.hideElement(d3.selectAll("#form"), hide);
+	}
+	// ---
+	// Description: Wrapper for simple plot hiding
+	// ---
+	SPE.prototype.hideCanvas = function(hide){
+		this.hideElement(d3.selectAll("#canvas"), hide);
+	}
 	// ---
 	// Description: Generate navigation menu
 	// ---
@@ -283,7 +322,7 @@ var SPE = (function () {
 		scaleX = d3.scaleLinear().domain([0, 305]).range([0, this.logo_dim]);
 		scaleY = d3.scaleLinear().domain([0, 341]).range([0, this.logo_dim]);
 		var logo = menu.insert("svg",":first-child").attr("width", this.logo_dim + 250).attr("height", this.logo_dim + 110);
-		// append
+		// appendgenerateB
 		logo.append("g").attr("id","logo-sp").selectAll("circle").data(this.logo_sp)
 			.enter().append("circle")
 				.attr("cx", function(d){ return scaleX(d[0]);})
@@ -291,53 +330,72 @@ var SPE = (function () {
 		logo.append("g").attr("id","logo-magnifying-glass").html(this.logo_mg);
 	}
 
+
+
 	// ---
 	// Description: Generate a form with 3 dropdowns to select the files to be used
 	// ---
 	SPE.prototype.selectDataGUI = function(){
 		var self = this;
 		// failsafe to remove all objects
-		this.clearGeneratedElements();testM[m]
+		this.clearGeneratedElements();
 		// generate dropdowns
-		d3.select("#select-data-files").selectAll("select")
-			.data([this.label_files, this.raw_files, this.fv_files])
-			.enter().append("select")
-						.attr("id", function(d,i){ return "file" + i})
-						.selectAll("option").data(function(d){return d})
-							.enter().append("option").text(function(d){return d}).attr("value", function(d,i){ return i});
-		// add min cluster size input
-		d3.select("#select-data-files").append("input").attr("id","min-region-size-val").attr("type","text").attr("value", self.min_region_size);
-		// add eps input
-		d3.select("#select-data-files").append("input").attr("id","eps-val").attr("type","text").attr("value", self.eps);
+		var formDivs = d3.select("#form").selectAll("div")
+			.data([["Meta Data", this.label_files, "selected-label-option"],
+					["Raw Data",this.raw_files, "selected-raw-option"],
+					["Feature Vector",this.fv_files, "selected-fv-option"],
+					["Minimal region size", this.min_region_size, "min-region-size-val"],
+					["Epsilon border", this.eps, "eps-val"]]).enter().append("div");
+		formDivs.append("label")
+			.text(function(d){ return d[0];});
+		// select only those with array an create selects
+		formDivs.filter(function(d){ return Array.isArray(d[1])})
+			.append("select")
+				.attr("id", function(d){ return d[2];})
+					.selectAll("option")
+						.data(function(d){ return d[1];})
+							.enter().append("option")
+								.text(function(d){return d;})
+								.attr("value", function(d,i){ return i})
+								// redundant but works for selected option - problem is the double data binding
+								.property("selected", function(d){ return d == self.label_files[self.selected_label] || d == self.raw_files[self.selected_raw] || d == self.fv_files[self.selected_fv];});
+		// select text inputs
+		formDivs.filter(function(d){ return !Array.isArray(d[1])})
+			.append("input")
+				.attr("type","text")
+				.attr("id", function(d){ return d[2];})
+				.attr("value", function(d){ return d[1];});
+
 		// add event button
-		d3.select("#select-data-files").append("button").text("GENERATE").on("click", function(){
-			self.selected_label = d3.select("#file0").node().value;
-			self.selected_raw = d3.select("#file1").node().value;
-			self.selected_fv = d3.select("#file2").node().value;
+		d3.select("#form").append("div").classed("button",true)
+			.append("button").text("DBSCAN").on("click", function(){
+			self.selected_label = d3.select("#selected-label-option").node().value;
+			self.selected_raw = d3.select("#selected-raw-option").node().value;
+			self.selected_fv = d3.select("#selected-fv-option").node().value;
 			self.min_region_size = parseInt(d3.select("#min-region-size-val").node().value);
 			self.eps = parseFloat(d3.select("#eps-val").node().value);
 			self.measurement_count = self.raw[self.selected_raw].length;
-			d3.select("#select-data-files").selectAll("select").remove();
-			d3.select("#select-data-files").selectAll("input").remove();
-			d3.select("#select-data-files").selectAll("button").remove();
+			d3.select("#form").selectAll("div").remove();
+			self.hideForm(true);
+			self.hideLoading(false);
 			self.generateLoaderMessage("Calculating");
 			self.combineData();	// call the creation of the measurements objects
 		});
 
-		// set dropdown selected values
-		d3.select("#file0").selectAll("option").property("selected", function(d,i){ if(i == self.selected_label) {return true;} return false;});
-		d3.select("#file1").selectAll("option").property("selected", function(d,i){ if(i == self.selected_raw) {return true;} return false;});
-		d3.select("#file2").selectAll("option").property("selected", function(d,i){ if(i == self.selected_fv) {return true;} return false;});	
+		// STARTING VALUE IS 0 - in this case try to load tested values
 		if(self.eps == 0 && self.tested_eps[self.fv_files[self.selected_fv]]){
 			d3.select("#eps-val").attr("value", self.tested_eps[self.fv_files[self.selected_fv]]);
 		}
-		// on select event
-		d3.select("#file2").on("change", function(){
-			var fv_read =  d3.select("#file2").node().value;
+		// on select event try using tested values
+		d3.select("#selected-fv-option").on("change", function(){
+			var fv_read =  d3.select("#selected-fv-option").node().value;
 			if(self.tested_eps[self.fv_files[fv_read]]){
 				d3.select("#eps-val").attr("value", self.tested_eps[self.fv_files[fv_read]]);
 			}
 		});
+
+		// undhide
+		self.hideForm(false);
 	}
 	
 
@@ -347,8 +405,13 @@ var SPE = (function () {
 	SPE.prototype.clearGeneratedElements = function(){
 		// Terminate loader
 		d3.select("#loader").selectAll("div").remove();
+		this.hideLoading(true);
+		// Clean form
+		d3.select("#form").selectAll("div").remove();
+		this.hideForm(true);
 		// Clean all SVGs
 		d3.select("#canvas").selectAll("svg").remove();
+		this.hideCanvas(true);
 
 		console.log("TO DO function for clearing");
 	}
@@ -389,25 +452,7 @@ var SPE = (function () {
 			}
 			avgSize = avgSize / self.clusters.length;
 			// report clustering
-			self.generateLoaderMessage(self.measurements[m].fv_type + " has EPS["+self.eps+"] and "+ self.clusters.length + "clusters with AVG size " + avgSize);
-			// restart clustering button
-			d3.select("#select-data-files").append("button").text("RESTART").on("click", function(){
-				d3.select("#select-data-files").selectAll("button").remove();
-				d3.select("#select-data-files").selectAll("select").remove();
-				self.selectDataGUI();
-			});
-			// sorting gui
-			d3.select("#select-data-files").append("select").attr("id","overview-sort")
-				.selectAll("option").data(["From Center", "From Farthest", "Between Outliers"])
-					.enter().append("option")
-						.text(function(d){return d;}).attr("value",function(d){return d.split(" ").join("");});
-			d3.select("#select-data-files").append("button").text("SORT").on("click", function(){
-				d3.select("#canvas").selectAll("svg").remove();
-				console.log(d3.select("#overview-sort").node().value);
-				self.sortClusters(self, d3.select("#overview-sort").node().value);
-				self.plotRepresentativeMatrix();
-			});
-			self.sortClusters(self, "fromCenter");
+			self.generateLoaderMessage(self.measurements[0].fv_type + " has EPS["+self.eps+"] and "+ self.clusters.length + "clusters with AVG size " + avgSize);
 			self.plotRepresentativeMatrix();
 		}, 1);
 	}
@@ -419,6 +464,7 @@ var SPE = (function () {
 		var squaredSum = 0;
 		var a = this.measurements[m1];
 		var b = this.measurements[m2];
+		console.log(m1, m2, a,b)
 		for(var i=0; i<a.feature_count; i++){
 			var diff = Math.abs(a.fv[i] - b.fv[i]);
 			if(diff > 0){
@@ -545,37 +591,87 @@ var SPE = (function () {
 	// Description: sort clusters based on center cluster
 	//				center cluster is lowest value, and by the distance from it the other are sorted
 	// ---
-	SPE.prototype.sortClusters = function(self, sorter){
+	SPE.prototype.sort = function(self, type, sorter, cluster){
 		var sorterFunc;
-		switch(sorter.toLowerCase()){
-			case "fromcenter":
-				sorterFunc = function(a,b){return self.fromCenterClusterSorter(a,b);};
+		console.log(self, type, sorter, cluster)
+		type = type.toLowerCase();
+		switch(type + sorter.toLowerCase()){
+			case "measurementfromcenter":
+				sorterFunc = function(a,b){
+					return self.fromCenterSorter(
+								a,
+								b,
+								cluster.center_index
+				);};
 				break;
-			case "fromfarthest":
-				sorterFunc = function(a,b){return self.fromFarthestClusterSorter(a,b);};
+			case "measurementfromfarthest":
+				sorterFunc = function(a,b){
+					return self.fromFarthestSorter(
+								a,
+								b,
+								cluster.farthest_from_center_index
+				);};
 				break;
-			case "betweenoutliers":
-				sorterFunc = function(a,b){return self.betweenOutliersClusterSorter(a,b);};
+			case "measurementbetweenoutliers":
+				sorterFunc = function(a,b){
+					return self.betweenOutliersSorter(
+								a,
+								b,
+								cluster.farthest_from_center_index,
+								cluster.farthest_from_farthest_index
+				);};
+				break;
+			case "clusterfromcenter":
+				sorterFunc = function(c1,c2){
+					return self.fromCenterSorter(
+								c1.center_index,
+								c2.center_index,
+								self.cluster_of_clusters.center_index.center_index
+				);};
+				break;
+			case "clusterfromfarthest":
+				sorterFunc = function(c1,c2){
+					return self.fromFarthestSorter(
+								c1.center_index,
+								c2.center_index,
+								self.cluster_of_clusters.farthest_from_center_index.center_index
+				);};
+				break;
+			case "clusterbetweenoutliers":
+				sorterFunc = function(c1,c2){return self.betweenOutliersSorter(
+								c1.center_index,
+								c2.center_index,
+								self.cluster_of_clusters.farthest_from_center_index.center_index,
+								self.cluster_of_clusters.farthest_from_farthest_index.center_index
+				);};
 				break;
 			default:
-				throw "Unknown sorter string: " + sorter;
+				throw "Unknown sorter string [" + sorter + "] for type [" + type + "]";
 		}
-		this.clusters.sort(sorterFunc);
+		if(type = "cluster"){
+			self.clusters.sort(sorterFunc);
+		}
+		else if(type = "measurement"){
+			self.selected_cluster_measurment_indices.sort(sorterFunc);
+		}
+		else{
+			throw "Unknown type: " + type;
+		}
 	}
 
-	SPE.prototype.fromCenterClusterSorter = function(c1, c2){
-		if(c1.id == c2.id){
+	SPE.prototype.fromCenterSorter = function(c1, c2, center){
+		if(c1 == c2){
 			return 0;
 		}
-		if(c1.id == this.cluster_of_clusters.center_index.id){
+		if(c1 == center){
 			return -1;
 		}
-		if(c2.id == this.cluster_of_clusters.center_index.id){
+		if(c2 == center){
 			return 1;
 		}
 		// if none is cluster center calculate the distances
-		var center2c1 = this.measurementDistance(c1.center_index, this.cluster_of_clusters.center_index.center_index);
-		var center2c2 = this.measurementDistance(c2.center_index, this.cluster_of_clusters.center_index.center_index);
+		var center2c1 = this.measurementDistance(c1, center);
+		var center2c2 = this.measurementDistance(c2, center);
 		// since float is unstable - use ifs
 		if(center2c1 < center2c2){
 			return -1;
@@ -586,19 +682,19 @@ var SPE = (function () {
 		return 0;
 	}
 
-	SPE.prototype.fromFarthestClusterSorter = function(c1, c2){
-		if(c1.id == c2.id){
+	SPE.prototype.fromFarthestSorter = function(c1, c2, farthest){
+		if(c1 == c2){
 			return 0;
 		}
-		if(c1.id == this.cluster_of_clusters.farthest_from_center_index.id){
+		if(c1 == farthest){
 			return -1;
 		}
-		if(c2.id == this.cluster_of_clusters.farthest_from_center_index.id){
+		if(c2 == farthest){
 			return 1;
 		}
 		// if none is farthestr cluster calculate the distances
-		var farthest2c1 = this.measurementDistance(c1.center_index, this.cluster_of_clusters.farthest_from_center_index.center_index);
-		var farthest2c2 = this.measurementDistance(c2.center_index, this.cluster_of_clusters.farthest_from_center_index.center_index);
+		var farthest2c1 = this.measurementDistance(c1, farthest);
+		var farthest2c2 = this.measurementDistance(c2, farthest);
 		// since float is unstable - use ifs
 		if(farthest2c1 < farthest2c2){
 			return -1;
@@ -609,7 +705,7 @@ var SPE = (function () {
 		return 0;
 	}
 
-	// betweenOutliersClusterSorter:
+	// betweenOutliersSorter:
 	// we use the progress between farthest from center till the farthest member from it
 	// we form a triangle like this:
 	//						     cluster
@@ -629,32 +725,32 @@ var SPE = (function () {
 	//	g = C / 2m
 	//
 	//	sort by g
-		SPE.prototype.betweenOutliersClusterSorter = function(c1, c2){
-		if(c1.id == c2.id){
+	SPE.prototype.betweenOutliersSorter = function(c1, c2, outlier1, outlier2){
+		if(c1 == c2){
 			return 0;
 		}
-		if(c1.id == this.cluster_of_clusters.farthest_from_center_index.id){
+		if(c1 == outlier1){
 			return -1;
 		}
-		if(c2.id == this.cluster_of_clusters.farthest_from_center_index.id){
+		if(c2 == outlier1){
 			return 1;
 		}
-		if(c1.id == this.cluster_of_clusters.farthest_from_farthest_index.id){
+		if(c1 == outlier2){
 			return 1;
 		}
-		if(c2.id == this.cluster_of_clusters.farthest_from_farthest_index.id){
+		if(c2 == outlier2){
 			return -1;
 		}
 		// calculate g for both cluster c1 and c2
 		// start with distances
 		// f
-		var f1 = this.measurementDistance(c1.center_index, this.cluster_of_clusters.farthest_from_center_index.center_index);
-		var f2 = this.measurementDistance(c2.center_index, this.cluster_of_clusters.farthest_from_center_index.center_index);
+		var f1 = this.measurementDistance(c1, outlier1);
+		var f2 = this.measurementDistance(c2, outlier1);
 		// s
-		var s1 = this.measurementDistance(c1.center_index, this.cluster_of_clusters.farthest_from_farthest_index.center_index);
-		var s2 = this.measurementDistance(c2.center_index, this.cluster_of_clusters.farthest_from_farthest_index.center_index);
+		var s1 = this.measurementDistance(c1, outlier2);
+		var s2 = this.measurementDistance(c2, outlier2);
 		// m - is constant
-		var m = this.cluster_of_clusters.outlier_distance;
+		var m = this.measurementDistance(outlier1, outlier2);
 		var mSquared = Math.pow(m, 2);
 		var m2 = 2 * m;
 		// constant C
@@ -671,7 +767,45 @@ var SPE = (function () {
 		return 0;
 	}
 
+	// ---
+	// Description: Generate a form with a dropdown of possible sorts
+	// ---
+	SPE.prototype.selectSortGUI = function(type, cluster){
+		var self = this;
+		d3.select("#form").append("div").append("select").attr("id","overview-sort")
+			.selectAll("option").data(["From Center", "From Farthest", "Between Outliers"])
+				.enter().append("option")
+					.text(function(d){return d;}).attr("value",function(d){return d.split(" ").join("");});
+		d3.select("#form").append("div").classed("button",true).append("button").text("SORT").on("click", function(){
+			self.sort(self, type, d3.select("#overview-sort").node().value, cluster);
+			self.hideForm(true);
+			d3.select("#canvas").selectAll("svg").remove();
+			d3.select("#form").selectAll("div").remove();
+			type = type.toLowerCase();
+			if(type == "cluster"){
+				self.plotRepresentativeMatrix();
+			}
+			else if(type = "measurement"){
+				self.plotClusterAsMatrix(cluster);
+			}
+			else{
+				throw "Unknown type: " + type;
+			}
+		});
+		self.sort(self, type, "fromCenter", cluster);
+		// unhide form
+		self.hideForm(false);
 
+		// restart clustering button - now link in menu
+					/*
+			d3.select("#form").append("button").text("RESTART").on("click", function(){
+				d3.select("#form").selectAll("button").remove();
+				d3.select("#form").selectAll("select").remove();
+				self.selectDataGUI();
+			});*/
+			// sorting gui
+
+	}
 
 	// ---
 	// Description: Using the measurement plots the scatter plot as selector child
@@ -747,7 +881,7 @@ var SPE = (function () {
 	// ---
 	// Description: Using the measurement plots the scatter plot as selector child
 	// ---
-	SPE.prototype.plotScatterPlotMatrix = function(selector, measurements, width, height, showDetails, onClickFun){
+	SPE.prototype.plotScatterPlotMatrix = function(selector, measurement_indices, width, height, showDetails, onClickFun){
 		var border = 3.2; // == 0.2em right/bottom border of svg
 		var max_cols = Math.floor(width / (this.matrix_sp_min_width + border));
 		var max_rows = Math.floor(height / (this.matrix_sp_min_height + border));
@@ -758,7 +892,7 @@ var SPE = (function () {
 		}
 		// start with 1,1 dimansion matrix and grow it following hte guidelines
 		var cols = 1, rows = 1;
-		while(cols * rows < measurements.length && (cols < max_cols || rows < max_rows)){
+		while(cols * rows < measurement_indices.length && (cols < max_cols || rows < max_rows)){
 			if(cols + 1 > rows && rows < max_rows || cols == max_cols){
 				rows++;
 			}
@@ -770,8 +904,8 @@ var SPE = (function () {
 
 		var sp_width = width / cols - 2*border;
 		var sp_height = height / rows - 2*border;
-		for(var m=0; m < measurements.length; m++){
-			this.plotScatterPlot(selector, measurements[m], sp_width, sp_height, showDetails, onClickFun);
+		for(var m=0; m < measurement_indices.length; m++){
+			this.plotScatterPlot(selector, this.measurements[measurement_indices[m]], sp_width, sp_height, showDetails, onClickFun);
 		}
 	}
 
@@ -794,16 +928,21 @@ var SPE = (function () {
 	// Description: use this.cluster centers to plot a matrix  of scatter plot represantatives
 	// ---
 	SPE.prototype.plotRepresentativeMatrix = function(){
+		this.hideCanvas(false);
 		var represantatives = [];
 		for(var c=0; c<this.clusters.length; c++){
-			represantatives.push(this.measurements[this.clusters[c].center_index]);
+			represantatives.push(this.clusters[c].center_index);
 		}
+		// enable form for inside cluster sor_indicesting - sorts also automatically
+		this.selectSortGUI("cluster");
+		// start plotting
 		var canvasDim = this.calculateCanvasDim();
 		var self = this;
 		this.plotScatterPlotMatrix(d3.select("#canvas"), represantatives, canvasDim[0], canvasDim[1], false, function(element, m){
 			// cluster id is also cluster index in cluster of clusters, while cluster list is sorted
 			var cluster_id = parseInt(element.id.split(" ")[0].split(":")[1]);
 			self.clearGeneratedElements();
+			self.hideCanvas(false);
 			self.plotClusterAsMatrix(self.cluster_of_clusters.getMember(cluster_id));
 		});
 	}
@@ -812,14 +951,20 @@ var SPE = (function () {
 	// Description: use given cluster to plot a matrix of cluster scatter plots
 	// ---
 	SPE.prototype.plotClusterAsMatrix = function(cluster){
-		var measurements = [];
+		this.hideCanvas(false);
+		this.selected_cluster_measurment_indices = [];
 		for(var m=0; m<cluster.size; m++){
-			measurements.push(this.measurements[cluster.getMember(m)]);
+			this.selected_cluster_measurment_indices.push(cluster.getMember(m));
 		}
+		console.log(this.selected_cluster_measurment_indices)
+		// enable form for inside cluster sorting - sorts also automatically
+		this.selectSortGUI("measurement", cluster);
+		// start plotting
 		var canvasDim = this.calculateCanvasDim();
 		var self = this;
-		this.plotScatterPlotMatrix(d3.select("#canvas"), measurements, canvasDim[0], canvasDim[1], false, function(element, m){
+		this.plotScatterPlotMatrix(d3.select("#canvas"), this.selected_cluster_measurment_indices, canvasDim[0], canvasDim[1], false, function(element, m){
 			self.clearGeneratedElements();
+			self.hideCanvas(false);
 			self.plotScatterPlot(d3.select("#canvas"), m, canvasDim[0], canvasDim[1], true, null);
 		});
 	}
@@ -892,7 +1037,6 @@ var Cluster = (function () {
 		this.center_index = -1;
 		this.farthest_from_center_index = -1;
 		this.farthest_from_farthest_index = -1;
-		this.outlier_distance = -1;
 	}
 
 	// ---
@@ -968,7 +1112,6 @@ var Cluster = (function () {
 				}
 			}
 		}
-		this.outlier_distance = maxValue;
 	}
 	return Cluster;
 })();
@@ -980,6 +1123,10 @@ var Cluster = (function () {
 function startSPE() {
 	// initialize object
 	var spe = new SPE();
+	// initialize hidden html structure
+	spe.generateBodyStructure();
+	// enable loading animation
+	spe.hideLoading(false);
 	// as a start load the text instead of animation while loading
 	spe.generateLoaderMessage("Scatter Plot Explorer");
 	// timeout allows the repaint to catch a break between preload and init

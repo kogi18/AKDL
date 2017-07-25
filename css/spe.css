@@ -3,6 +3,10 @@ body{
 	padding: 0;
 }
 
+.hidden{
+	display: none;
+}
+
 /* menu */
 nav{
 	background-color: #2BBBD8;
@@ -70,11 +74,14 @@ nav svg #logo-magnifying-glass path {
 
 /* SVG PLOTS */
 
-#canvas{
+#canvas, #form {
 	padding: 0;
 	margin: 1em;
 	margin-top: 0;
 	border: 1px solid #102E37;
+}
+
+#canvas{
 	max-height: 90vh;
 	overflow-y: scroll;
 	overflow-x: hidden;
@@ -118,4 +125,51 @@ nav svg #logo-magnifying-glass path {
 	fill: #FCD271;
 }
 
+/* form element positioning*/
+#form{
+	padding: 1em;
+	text-align: center;
+	background-color: #E8EDE0;
+	color: #102E37;
+}
 
+#form div *{
+	margin: 0.4em 1%;
+	width: 34%;
+	max-width: 250px;
+	text-align: left;
+}
+
+#form div label {
+	display: inline-block;
+}
+
+#form select, #form button{
+	height: 2.4vh;
+	width: 37%;
+	text-align-last: center;
+	background-color: #FCD271;
+	cursor: pointer;
+}
+
+#form button{
+	border-radius: 25px;
+}
+
+#form div.button{
+	text-align: center;
+}
+
+#form input{
+	text-align: right;
+	padding: 0 0.3em;
+	height: 2.2vh;
+	background-color: #FCD271;
+	color: #102E37;
+}
+
+/*loading animation*/
+#loader{
+	height: 10vh;
+	background-color: #2BBBD8; 
+}

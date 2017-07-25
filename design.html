@@ -19,7 +19,16 @@
 				spe = new SPE();
 				// prepare page
 				spe.generateBodyStructure();
-				spe.generateMenu();
+				// loading animation
+				spe.hideLoading(false);
+				// dummy files without actual files
+				spe.label_files = ["meta.csv","SELECTED.csv"];
+				spe.raw_files = ["RAW.data","NOT_SELECTED.data","SELECTED.data"];
+				spe.fv_files = ["FV.fv","SELECTED.fv"];
+				spe.lists =  ["ALL.list", "LIST1.list", "LIST2.list"];
+				spe.selected_label = 1;
+				spe.selected_raw = 2;
+				spe.selected_fv = 1;
 
 				// prepare dummy data for design development
 				testM = [];
@@ -57,7 +66,15 @@
 				}
 				spe.clusters = testC;
 				spe.prepareCenterCluster();
+				spe.selectDataGUI();
 				spe.plotRepresentativeMatrix();
+
+				setTimeout(function(){
+					spe.hideLoading(true);
+					spe.hideMenu(false);
+					spe.hideForm(false);
+					spe.hideCanvas(false);
+				},1);
 			}
 		</script>
 	</head>
