@@ -4,7 +4,7 @@ body{
 }
 
 .hidden{
-	display: none;
+	display: none !important;
 }
 
 /* menu */
@@ -61,12 +61,14 @@ nav svg {
 
 }
 
-nav svg g circle {
+nav svg g circle,
+#loader svg g circle{
 	r: 15;
 	fill: #102E37;
 }
 
-nav svg #logo-magnifying-glass path {
+nav svg #logo-magnifying-glass path,
+#loader #loader-logo-magnifying-glass path {
 	stroke: #FCD271;
 	transform: translate(12em,5em);
 }
@@ -180,6 +182,44 @@ nav svg #logo-magnifying-glass path {
 
 /*loading animation*/
 #loader{
-	height: 10vh;
-	background-color: #2BBBD8; 
+	height: 100vh;
+	background-color: #2BBBD8;
+	text-align: center;
+}
+
+#loader-SVG{
+	height: 60vh;
+}
+#loader-msg{
+	height: 40vh;
+	color: #E8EDE0;
+    font-size: 1.2em;
+    font-family: cursive;
+    padding-top: 3em;
+}
+
+#loader svg{
+	transform: scale(0.5) translate(10em);
+}
+
+#loader svg g{
+	transform: translate(6em, 5em);
+}
+
+#loader svg g circle{
+	r: 15;
+}
+
+#loader #loader-logo-magnifying-glass path {
+	stroke: #FCD271;
+	transform: translate(-6em,15em);
+	animation: moving-mg 3s linear 0s infinite alternate;
+}
+
+@keyframes moving-mg {
+	0%		{transform: translate(-6em,15em);}
+	25%		{transform: translate(0em,9em);}
+	60%		{transform: translate(12em,9em);}
+	75%		{transform: translate(16em,5em);}
+	100%	{transform: translate(18em,-5em);}
 }

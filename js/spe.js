@@ -66,11 +66,13 @@ var SPE = (function () {
 									"Generate",	[
 														["Measurements", "menu-data-select"]
 													],
-									"menu-restart-palceholder"
+									"menu-restart"
 								],[
 									"Overview",		[
-														["Matrix", "menu-matrix-overview"]
-													]
+														["Matrix", "menu-matrix-overview"],
+														["In-line", "menu-inline-overview"]
+													],
+									"menu-overview"
 								],[
 									"Cluster",		[
 														["Matrix", "menu-matrix-cluster" ],
@@ -80,10 +82,11 @@ var SPE = (function () {
 								],[
 									"Scatter Plot", [], "menu-sp"
 								]
-							];
+		];
 		this.logo_sp = [[35, 307], [34, 307], [22, 307], [135, 244], [51, 265], [74, 244], [57, 254], [282, 43], [49, 275], [125, 233], [71, 233], [23, 307], [165, 233], [60, 254], [67, 233], [44, 286], [281, 65], [43, 286], [41, 286], [24, 307], [28, 286], [30, 297], [77, 233], [110, 233], [33, 297], [32, 307], [65, 254], [62, 265], [46, 275], [274, 212], [282, 75], [101, 233], [281, 54], [189, 244], [27, 297], [58, 265], [240, 233], [29, 297], [75, 233], [281, 128], [280, 170], [83, 223], [69, 244], [61, 254], [30, 307], [47, 265], [53, 265], [48, 275], [55, 254], [281, 43], [46, 286], [39, 297], [81, 233], [89, 244], [281, 33], [25, 297], [36, 307], [23, 297], [68, 244], [278, 191], [56, 265], [54, 275], [34, 297], [59, 254], [37, 297], [281, 22], [79, 244], [38, 297], [64, 254], [31, 307], [45, 286], [68, 254], [36, 297], [281, 117], [50, 275], [94, 233], [148, 254], [73, 233], [26, 307], [282, 65], [63, 265], [40, 297], [76, 244], [267, 233], [42, 286], [66, 244], [25, 307], [27, 318]];
 		this.logo_mg = "<path fill='none' stroke='#000' stroke-width='36' stroke-linecap='round' d='m280,278a153,153 0 1,0-2,2l170,170m-91-117 110,110-26,26-110-110'/>"
-		this.logo_dim = 490;		
+		this.logo_dim = 490;
+		this.reloadSPE = null; //function holder	
 		// tests done with min cluster size 5
 		this.tested_eps = {
 			"corr.fv": "0.0015",	// 44 clusters of AVG size 560 and 0.1% marked as noise
@@ -120,6 +123,20 @@ var SPE = (function () {
 			"\nLoaded raw data files [" + this.raw_load + "/" + this.raw_files.length + "]"+
 			"\nLoaded feature vector files [" + this.fv_load + "/" + this.fv_files.length + "]",
 			""].join(this.string_line_seperator);
+	}
+
+	// ---
+	// Description: Function for setting all propeties of object to null
+	// ---
+	SPE.prototype.makeMeNull = function(){
+		for (var key in this) {
+			if (this.hasOwnProperty(key)) {
+				//Now, object[key] is the current value
+				if (this[key]){
+					delete this[key];
+				}
+			}
+		}
 	}
 
 	// ---
@@ -170,7 +187,12 @@ var SPE = (function () {
 			// fill menu list option
 			d3.select("#menu-list").selectAll("li").data(self.lists)
 				.enter().append("li").classed("menu-option", true)
-					.text(function(file){ return file.split(".")[0]});
+					.text(function(file){ return file.split(".")[0]})
+					.on("click", function(file) {
+						var reload = self.reloadSPE;
+						self.makeMeNull();
+						reload(file);
+			});
 
 			// record scatterr plot file count
 			self.sp_file_count = self.label_files.length + self.raw_files.length + self.fv_files.length;
@@ -269,7 +291,11 @@ var SPE = (function () {
 				.attr("id", function(d){ return d;})
 				.classed("hidden", true);
 		this.generateMenu();
+		this.hideMenuItem("menu-overview",true);
+		this.hideMenuItem("menu-cluster",true);
+		this.hideMenuItem("menu-sp",true);
 		d3.selectAll("nav").classed("hidden", true);
+		this.generateLoaderStructure();
 	}
 
 	// ---
@@ -284,6 +310,19 @@ var SPE = (function () {
 	// ---
 	SPE.prototype.hideMenu = function(hide){
 		this.hideElement(d3.selectAll("nav"), hide);
+	}
+
+	// ---
+	// Description: Wrapper for simple menu item hiding
+	// ---
+	SPE.prototype.hideMenuItem = function(menuItemID, hide){
+		var parent = d3.select("#" + menuItemID).node().parentNode;
+		if(hide){
+			parent.className = "hidden";
+		}
+		else{
+			parent.className = "menu-option";
+		}
 	}
 
 	// ---
@@ -331,18 +370,59 @@ var SPE = (function () {
 
 		// draw logo
 		// need scales since using actual SP data
-		scaleX = d3.scaleLinear().domain([0, 305]).range([0, this.logo_dim]);
-		scaleY = d3.scaleLinear().domain([0, 341]).range([0, this.logo_dim]);
+		var scaleX = d3.scaleLinear().domain([0, 305]).range([0, this.logo_dim]);
+		var scaleY = d3.scaleLinear().domain([0, 341]).range([0, this.logo_dim]);
 		var logo = menu.insert("svg",":first-child").attr("width", this.logo_dim + 250).attr("height", this.logo_dim + 110);
-		// appendgenerateB
+		// generate logo
 		logo.append("g").attr("id","logo-sp").selectAll("circle").data(this.logo_sp)
 			.enter().append("circle")
 				.attr("cx", function(d){ return scaleX(d[0]);})
 				.attr("cy", function(d){ return scaleY(d[1]);});
 		logo.append("g").attr("id","logo-magnifying-glass").html(this.logo_mg);
+		// add functions
+		this.generateMenuFunctions();
 	}
 
+	// ---
+	// Description: Bind navigation menu functions
+	// ---
+	SPE.prototype.generateMenuFunctions = function(){
+		var self = this;
+		d3.select("#menu-data-select").on("click", function(){
+			self.measurements = [];
+			self.clusters = [];
+			self.hideMenuItem("menu-overview",true);
+			self.hideMenuItem("menu-cluster",true);
+			self.hideMenuItem("menu-sp",true);
+			self.clearGeneratedElements();
+			self.selectDataGUI();
+		});
+		d3.select("#menu-matrix-overview").on("click", function(){
+			self.selected_cluster_measurment_indices = [];
+			self.hideMenuItem("menu-cluster",true);
+			self.hideMenuItem("menu-sp",true);
+			self.clearGeneratedElements();
+			self.plotRepresentativeMatrix();
 
+		});
+		d3.select("#menu-inline-overview").on("click", function(){
+			self.selected_cluster_measurment_indices = [];
+			self.hideMenuItem("menu-cluster",true);
+			self.hideMenuItem("menu-sp",true);
+			self.clearGeneratedElements();
+			self.plotRepresentativeInline();
+		});
+		d3.select("#menu-matrix-cluster").on("click", function(){
+			self.hideMenuItem("menu-sp",true);
+			self.clearGeneratedElements();
+			self.plotClusterAsMatrix(self.cluster_of_clusters.getMember(self.selected_cluster_id));
+		});
+		d3.select("#menu-inline-cluster").on("click", function(){
+			self.hideMenuItem("menu-sp",true);
+			self.clearGeneratedElements();
+			self.plotClusterAsInlineScatterPlot(self.cluster_of_clusters.getMember(self.selected_cluster_id));
+		});
+	}
 
 	// ---
 	// Description: Generate a form with 3 dropdowns to select the files to be used
@@ -389,8 +469,9 @@ var SPE = (function () {
 			self.measurement_count = self.raw[self.selected_raw].length;
 			d3.select("#form").selectAll("div").remove();
 			self.hideForm(true);
+			self.hideMenu(true);
 			self.hideLoading(false);
-			self.generateLoaderMessage("Calculating");
+			self.generateLoaderMessage("Preparing Measurements");
 			self.combineData();	// call the creation of the measurements objects
 		});
 
@@ -416,27 +497,48 @@ var SPE = (function () {
 	// ---
 	SPE.prototype.clearGeneratedElements = function(){
 		// Terminate loader
-		d3.select("#loader").selectAll("div").remove();
+		d3.select("#loader-msg").selectAll("div").remove();
+		this.generateLoaderMessage("Scatter Plot Explorer");
 		this.hideLoading(true);
 		// Clean form
 		d3.select("#form").selectAll("div").remove();
 		this.hideForm(true);
 		// Clean all SVGs
-		d3.select("#canvas").selectAll("svg").remove();
+		d3.select("#canvas").attr("style", null).selectAll("svg").remove();
 		this.hideCanvas(true);
 
 		console.log("TO DO function for clearing");
+	}
+
+
+	// ---
+	// Description: Generate loader structure
+	// ---
+	SPE.prototype.generateLoaderStructure = function(){
+		// need scales since using actual SP data
+		var scaleX = d3.scaleLinear().domain([0, 305]).range([0, this.logo_dim]);
+		var scaleY = d3.scaleLinear().domain([0, 341]).range([0, this.logo_dim]);
+		var logo = d3.select("#loader").append("div").attr("id","loader-SVG")
+			.append("svg").attr("width", this.logo_dim + 410).attr("height", this.logo_dim + 400);
+		// generate logo
+		logo.append("g").attr("id","loader-logo-sp").selectAll("circle").data(this.logo_sp)
+			.enter().append("circle")
+				.attr("cx", function(d){ return scaleX(d[0]);})
+				.attr("cy", function(d){ return scaleY(d[1]);});
+		logo.append("g").attr("id","loader-logo-magnifying-glass").html(this.logo_mg);
+		d3.select("#loader").append("div").attr("id", "loader-msg")
 	}
 
 	// ---
 	// Description: Dynamic animated loader message - type of animation defined in CSS
 	// ---
 	SPE.prototype.generateLoaderMessage = function(msg){
-		d3.select("#loader").selectAll("div").data(msg.split("\n"))
+		d3.select("#loader-msg").selectAll("div").data(msg.split("\n"))
 			.text(function(d){return d;})
 			.enter().append("div").text(function(d){return d;})
 			.exit().remove();
-		console.log("TO DO function for loader");
+		// force redraw by hiding and showing msg element
+		d3.select("#loader-msg").classed("hidden",true).classed("hidden",false);
 	}
 
 	// ---
@@ -451,12 +553,10 @@ var SPE = (function () {
 		for(var m=0; m < this.measurement_count; m++){
 			this.measurements[m] = new Measurement(labelArray[m], rawArray[m], fvArray[m]);
 		}
-		this.generateLoaderMessage("Measurements prepared");
 		// for loading message
-		this.generateLoaderMessage("DBSCAN");
+		this.generateLoaderMessage("DBSCAN\nEpsilon: "+this.eps+"\nMinimal Region Size: "+this.min_region_size);
 		var self = this;
 		setTimeout(function(){
-			console.log("Trying with EPS["+self.eps+"] and minRegionSize["+self.min_region_size+"]");
 			self.dbscan();
 			var avgSize = 0;
 			for(var c=0; c < self.clusters.length; c++){
@@ -464,7 +564,10 @@ var SPE = (function () {
 			}
 			avgSize = avgSize / self.clusters.length;
 			// report clustering
-			self.generateLoaderMessage(self.measurements[0].fv_type + " has EPS["+self.eps+"] and "+ self.clusters.length + "clusters with AVG size " + avgSize);
+			console.log(self.measurements[0].fv_type + " has EPS["+self.eps+"] and "+ self.clusters.length + "clusters with AVG size " + avgSize);
+			self.hideLoading(true);
+			self.hideMenu(false);
+			self.hideMenuItem("menu-overview", false);
 			self.plotRepresentativeMatrix();
 		}, 1);
 	}
@@ -523,6 +626,7 @@ var SPE = (function () {
 					this.marked_as_noise.push(m);
 				}
 				else{
+					this.generateLoaderMessage("DBSCAN\nMeasurement " + m + "/" + this.measurement_count+ "\nInitial region size: " + region.length);
 					console.log("Region size " + region.length + " [from all " + this.measurement_count +"]");
 					var cluster = new Cluster(this.clusters.length);
 					this.expandCluster(cluster, region);
@@ -531,6 +635,7 @@ var SPE = (function () {
 					// find farthest element from ceneter and the element farthest from farthest
 					cluster.findFarthestMember(distFun);
 					this.clusters.push(cluster);
+					this.generateLoaderMessage("DBSCAN\nCreated cluster " + cluster.id + "\nHolds " + cluster.size + " measurements");
 					console.log("Added " + cluster.id + " cluster with " + cluster.size + " elements and center member " + cluster.center_index);
 				}
 			}
@@ -851,7 +956,7 @@ var SPE = (function () {
 				// we neeed to reorder the elements
 				.on("mouseover", function() {
 					var cx = this.cx.baseVal.value, cy = this.cy.baseVal.value;
-					svg.selectAll("g").sort(function (a, b) {	// select the parent and sort the path's
+					svg.selectAll("g").sort(function (a, b) {
 					if (a[0] == cx && a[1] == cy) return 1;		// a is the hovered element, send "a" to the back
 					else return -1;								// a is not the hovered element, bring "a" to the front
 				})});
@@ -941,7 +1046,7 @@ var SPE = (function () {
 	// ---
 	SPE.prototype.checkFunctionType = function(functionToCheck){
 		var getType = {};
- 		return functionToCheck && getType.toString.call(functionToCheck) === '[object Function]';	
+		return functionToCheck && getType.toString.call(functionToCheck) === '[object Function]';	
 	}
 
 	// ---
@@ -973,11 +1078,19 @@ var SPE = (function () {
 									function(m){ return self.cluster_of_clusters.getMember(m.dbscan_cluster);},
 									function(element, m){
 										// cluster id is also cluster index in cluster of clusters, while cluster list is sorted
-										var cluster_id = parseInt(element.id.split(" ")[0].split(":")[1]);
+										self.selected_cluster_id = parseInt(element.id.split(" ")[0].split(":")[1]);
 										self.clearGeneratedElements();
 										self.hideCanvas(false);
-										self.plotClusterAsMatrix(self.cluster_of_clusters.getMember(cluster_id));
+										self.plotClusterAsMatrix(self.cluster_of_clusters.getMember(self.selected_cluster_id));
 		});
+	}
+
+
+	// ---
+	// Description: use this.cluster centers to plot a matrix of inline scatter plots
+	// ---
+	SPE.prototype.plotRepresentativeInline = function(){
+		alert("TO DO");
 	}
 
 	// ---
@@ -985,6 +1098,7 @@ var SPE = (function () {
 	// ---
 	SPE.prototype.plotClusterAsMatrix = function(cluster){
 		this.hideCanvas(false);
+		this.hideMenuItem("menu-cluster",false);
 		// enable form for inside cluster sorting - sorts also automatically
 		this.selectSortGUI("measurement", cluster);
 		this.selected_cluster_measurment_indices = [];
@@ -1018,11 +1132,19 @@ var SPE = (function () {
 									function(element, m){
 										self.clearGeneratedElements();
 										self.hideCanvas(false);
+										self.hideMenuItem("menu-sp",false);
 										// correct canvas size
 										d3.select("#canvas").style("height", "100%");
 										// +13 because we hide scrollbar
 										self.plotScatterPlot(d3.select("#canvas"), m, canvasDim[0] + 13, canvasDim[1], true, m, null);
 		});
+	}
+
+	// ---
+	// Description: use given cluster to plot a inline scatter plot for cluster
+	// ---
+	SPE.prototype.plotClusterAsInlineScatterPlot = function(cluster){
+		alert("TO DO");
 	}
 
 	return SPE;
@@ -1188,6 +1310,7 @@ var Cluster = (function () {
 function startSPE() {
 	// initialize object
 	var spe = new SPE();
+	spe.reloadSPE = restartSPE;
 	// initialize hidden html structure
 	spe.generateBodyStructure();
 	// enable loading animation
@@ -1204,7 +1327,6 @@ function startSPE() {
 // Description: Given a new filelist, it restarts the SPE engine with it. Should be used as a onClick function, etc.
 // ---
 function restartSPE(filelist){
-	alert("TO DO: kill previous startSPE execution");
 	// change the holder with filelist information
 	d3.select("body").attr("id", filelist);
 	// restart engine

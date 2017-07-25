@@ -1,9 +1,11 @@
 ALL.list
 corr.fv
+dft.fv
 ehd.fv
-filename.list
+fast.list
 labels.csv
 paa.fv
 rf.fv
 sax.fv
+suggested.list
 xyData.data

@@ -64,8 +64,8 @@
 					testC[m].findCenterMember(distF);
 					testC[m].findFarthestMember(distF);
 				}
-				console.log(testC)
-				spe.clusters = testC;
+				spe.generateLoaderMessage("This is a test for the animation\n It should look quite nice!\n" + spe.loadString());
+/*				spe.clusters = testC;
 				spe.prepareCenterCluster();
 				//spe.selectDataGUI();
 				spe.plotRepresentativeMatrix();
@@ -73,9 +73,11 @@
 				setTimeout(function(){
 					spe.hideLoading(true);
 					spe.hideMenu(false);
+					spe.hideMenuItem("menu-overview", false);
 					spe.hideForm(false);
 					spe.hideCanvas(false);
 				},1);
+*/
 			}
 		</script>
 	</head>
