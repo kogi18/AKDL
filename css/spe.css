@@ -107,18 +107,24 @@ nav svg #logo-magnifying-glass path,
 
 #canvas svg .pointGroup text {
 	display: none;
-	fill: #102E37;
 	font-size: 1.5em;
 }
 
+#canvas .axis
+#canvas svg .pointGroup text{
+	fill: #102E37;
+}
 
 #canvas svg circle {
 	r: 8;
 	fill: #F78D3F;
 }
 
-#canvas svg.detail:not(.inline) circle:hover {
+#canvas svg.detail:not(.inline) circle:hover,
+#canvas svg.inline g.measurement-group:hover circle,
+#canvas svg.inline g.measurement-group.selected-group circle{
 	fill: #2BBBD8;
+	fill-opacity: 1;
 }
 
 #canvas svg.detail.inline circle:hover {
@@ -140,6 +146,7 @@ nav svg #logo-magnifying-glass path,
 #canvas svg:not(.detail):not(.inline):hover circle{
 	fill: #E8EDE0;
 }
+
 
 /* form element positioning*/
 #form{

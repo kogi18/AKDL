@@ -36,6 +36,9 @@ var SPE = (function () {
 		this.label_load = 0;
 		this.raw_load = 0;
 		this.fv_load = 0;
+		// unique meta
+		// ignore GPS for now
+		this.meta_order = ["ID", "X-Axis", "Y-Axis", "XY-Axis", "Timestamp", "DOI"];
 		// measurements array
 		this.measurements = [];
 		// clustering engine - DBSCAN
@@ -43,15 +46,22 @@ var SPE = (function () {
 		this.eps = 0;
 		this.min_region_size = 5;
 		this.selected_cluster_measurment_indices = [];
+		self.selected_cluster_index = -1;
 		this.clusters = [];
 		this.cluster_of_clusters = null;
 		this.marked_as_noise = [];
 		this.selected_sorting = "fromcenter";
 		this.selected_cluster_rendering = "matrix";
+		this.selected_cluster_filter = "meta";
+		this.selected_cluster_filter_type = -1;
+		this.selected_cluster_filter_value = undefined;
 		// useful constants
 		this.string_line_seperator = "\n" + Array(40).join("-") + "\n";
 		this.matrix_sp_min_width = 300;
 		this.matrix_sp_min_height = 250;
+		this.min_inline_transparency = 0.3; // range[0,1]
+		this.sp_padding_normal_per = 0.1;
+		this.sp_padding_inline_per = 0.05;
 		// may depened on browser slider - I use chrome 
 		this.canvas_window_subtraction_width = 64;
 		// menu = 57px height + 20px margin + 1px border = 78px
@@ -70,6 +80,13 @@ var SPE = (function () {
 													],
 									"menu-restart"
 								],[
+									"Filter",		[
+														["Clusters", "menu-cluster-filter"],
+														["Metadata", "menu-metadata-filter"]
+													],
+									"menu-filter"
+
+								],[
 									"Overview",		[
 														["Matrix", "menu-matrix-overview"],
 														["In-line", "menu-inline-overview"]
@@ -82,7 +99,10 @@ var SPE = (function () {
 													],
 									"menu-cluster"
 								],[
-									"Scatter Plot", [], "menu-sp"
+									"Scatter Plot", [
+														["Information", "menu-info"]
+													],
+									"menu-sp"
 								]
 		];
 		this.logo_sp = [[35, 307], [34, 307], [22, 307], [135, 244], [51, 265], [74, 244], [57, 254], [282, 43], [49, 275], [125, 233], [71, 233], [23, 307], [165, 233], [60, 254], [67, 233], [44, 286], [281, 65], [43, 286], [41, 286], [24, 307], [28, 286], [30, 297], [77, 233], [110, 233], [33, 297], [32, 307], [65, 254], [62, 265], [46, 275], [274, 212], [282, 75], [101, 233], [281, 54], [189, 244], [27, 297], [58, 265], [240, 233], [29, 297], [75, 233], [281, 128], [280, 170], [83, 223], [69, 244], [61, 254], [30, 307], [47, 265], [53, 265], [48, 275], [55, 254], [281, 43], [46, 286], [39, 297], [81, 233], [89, 244], [281, 33], [25, 297], [36, 307], [23, 297], [68, 244], [278, 191], [56, 265], [54, 275], [34, 297], [59, 254], [37, 297], [281, 22], [79, 244], [38, 297], [64, 254], [31, 307], [45, 286], [68, 254], [36, 297], [281, 117], [50, 275], [94, 233], [148, 254], [73, 233], [26, 307], [282, 65], [63, 265], [40, 297], [76, 244], [267, 233], [42, 286], [66, 244], [25, 307], [27, 318]];
@@ -419,14 +439,16 @@ var SPE = (function () {
 			self.hideMenuItem("menu-sp",true);
 			self.clearGeneratedElements();
 			self.selected_cluster_rendering = "matrix";
-			self.plotClusterMeasurements(self.cluster_of_clusters.getMember(self.selected_cluster_id));
+			self.plotClusterMeasurements(self.cluster_of_clusters.getMember(self.selected_cluster_index));
 		});
 		d3.select("#menu-inline-cluster").on("click", function(){
 			self.hideMenuItem("menu-sp",true);
 			self.clearGeneratedElements();
 			self.selected_cluster_rendering = "inline";
-			self.plotClusterMeasurements(self.cluster_of_clusters.getMember(self.selected_cluster_id));
+			self.plotClusterMeasurements(self.cluster_of_clusters.getMember(self.selected_cluster_index));
 		});
+
+		console.log("TO DO FUNC: " + "menu-cluster-filter" + "menu-metadata-filter" + "menu-info");
 	}
 
 	// ---
@@ -618,6 +640,7 @@ var SPE = (function () {
 			}
 			if(this.measurements[index].dbscan_cluster < 0){
 				cluster.addMember(index);
+				cluster.addMeta(this.measurements[index].outputMeta());
 				this.measurements[index].dbscan_cluster = cluster.id;
 			}
 		}
@@ -759,10 +782,18 @@ var SPE = (function () {
 		};
 		self.cluster_of_clusters = new Cluster("Cluster of Clusters");
 		// prepare cluster object
+		var metaLists = self.cluster_of_clusters.metaToArrays();
 		// this exception stores the actual clusters and not indicies
 		for(var c=0; c<this.clusters.length; c++){
+			// before storing cluster set outer indicies - cluster one is permanent, sorted changes
+			self.clusters[c].setOuterIndecies(c);
 			self.cluster_of_clusters.addMember(self.clusters[c]);
+			var currentMeta = self.clusters[c].metaToArrays();
+			for(var mi=0; mi < metaLists.length; mi++){
+				metaLists[mi] = metaLists[mi].concat(currentMeta[mi]);
+			}
 		}
+		self.cluster_of_clusters.metaArraysToSets(metaLists);
 
 		// find center cluster
 		self.cluster_of_clusters.findCenterMember(clusterDistFunc);
@@ -836,6 +867,11 @@ var SPE = (function () {
 		}
 		if(type == "cluster"){
 			self.clusters.sort(sorterFunc);
+			// update inner cluster index reference - redundant but safe
+			// (different browsers have different implementations of sort)
+			for(var c=0; c < self.cluster_of_clusters.size; c++){
+				self.clusters[c].outer_sorted_index = c; // also updates the reference in cluster of clusters
+			}
 		}
 		else if(type == "measurement"){
 			self.selected_cluster_measurment_indices.sort(sorterFunc);
@@ -989,16 +1025,54 @@ var SPE = (function () {
 	}
 
 	// ---
-	// Description: Generate a form with a dropdown of possible sorts
+	// Description: Generate a form with a dropdown for selecting elements of inline plot , follo pattern [["name", value]]
 	// ---
-	SPE.prototype.selectInlinePlotGUI = function(){
-		console.log("TO DO cluster selection on inline plot GUI");
+	SPE.prototype.selectInlinePlotGUI = function(elements, sortFun, onChangeFun, onSubmitFun){
+		if(elements && elements.length > 0){
+			var self = this;
+			d3.select("#form").append("div").append("select").attr("id","plot-element-select")
+				.selectAll("option").data(elements)
+					.enter().append("option")
+						.text(function(d){return d[0];})
+						.attr("value",function(d){return d[1];});
+			// sort values
+			d3.select("#plot-element-select").selectAll("option").sort(sortFun);
+			// on select event try using tested values
+			d3.select("#plot-element-select").on("change", function(){
+				onChangeFun(d3.select("#plot-element-select").node().value);
+			});
+			switch(self.selected_cluster_filter){
+				case "cluster":
+					d3.select("#form").append("div").classed("button",true)
+						.append("button").text("INSPECT").on("click", function(){
+							onSubmitFun(d3.select("#plot-element-select").node().value);
+					});
+					break;
+				case "meta":
+					d3.select("#form").append("div").append("select").attr("id","plot-element-2-select")
+						.attr("disabled",true)
+						.on("change", function(){ onSubmitFun(d3.select("#plot-element-2-select").node().value);}
+					);
+					if(this.selected_cluster_filter_type >= 0){
+						d3.select("#plot-element-select").node().value = this.selected_cluster_filter_type;
+						onChangeFun(this.selected_cluster_filter_type);
+						if(this.selected_cluster_filter_value){
+							d3.select("#plot-element-2-select").node().value = this.selected_cluster_filter_value;
+							onSubmitFun(this.selected_cluster_filter_value);
+						}
+					}
+					break;
+				default:
+					throw "Unknown cluster selection type " + self.selected_cluster_filter;
+			};
+			self.hideForm(false);
+		}
 	}
 
 	// ---
 	// Description: Using the measurement generates scatter plot points
 	// ---
-	SPE.prototype.generateClusterGroupForSVG = function(svg, measurement, transparency, scaleX, scaleY, appendLabel, msgObject, onClickFun){
+	SPE.prototype.generateClusterGroupForSVG = function(svg, measurement, transparency, scaleX, scaleY, msgObject, onClickFun){
 		var clusterGroup = svg.selectAll("svg > g");
 		clusterGroup = clusterGroup.data(clusterGroup.data().concat([measurement]))
 			.enter().append("g")
@@ -1019,7 +1093,7 @@ var SPE = (function () {
 		// append on click function if function valid
 		if(this.checkFunctionType(onClickFun)){
 			// call function with measure as parameter - may be ignored
-			pointGroup.on("click", function(){ var element = this; onClickFun(element, measurement);});
+			pointGroup.on("click", function(){onClickFun(measurement);});
 		}
 		// order of appending tells the order of rendering
 		pointGroup.append("circle")
@@ -1044,37 +1118,33 @@ var SPE = (function () {
 						}
 						// a is not the hovered element, bring "a" to the front
 						else return -1;		
-		})});
-
-		if(appendLabel){
-			svg.classed("detail", true);
-			pointGroup.append("text")
-				.text(function(pair){return pair.join(",")})
-				.attr("x", function(pair){return scaleX(measurement.getX(pair));})
-				.attr("y", function(pair){return scaleY(measurement.getY(pair));});	
-		}			
+		})});		
 	}
 
 	// ---
 	// Description: Using the measurements plots the inline scatter plot as selector child
 	// ---
-	SPE.prototype.plotScatterPlotInline = function(selector, measurements, width, height, showDetails, idObject, msgObject, onClickFun){
+	SPE.prototype.plotScatterPlotInline = function(selector, measurements, width, height, appendAxis, msgObject, onClickFun){
+		var transparency = 1.0;
+		var padding_per = this.sp_padding_normal_per;
+		// when inline == many measurements
+		if(measurements.length > 1){
+			var scaleTransparency = d3.scaleLinear().domain([0, 1]).range([this.min_inline_transparency, 1]);
+			transparency = scaleTransparency(transparency / measurements.length);
+			padding_per = this.sp_padding_inline_per;
+		}
 		// since we want all points inside the canvas, we need a padding
-		var padding = d3.min([0.1 * width, 0.1 * height]);
+		var padding = d3.min([padding_per * width, padding_per * height]);
 		var ranges = [[padding, width - padding], [height - padding, padding]];
 		// the actual SVG parts
 		var svg = selector.append("svg")
 			.classed("inline", true)
-			.attr("id", idObject)
 			.attr("width", width)
 			.attr("height",height);
 		// append bg + text to display
 		svg.append("rect").attr("width", width).attr("height",height);
 		// calculate the transparency of points
-		var transparency = 1.0;
-		if(measurements.length > 0){
-			transparency = transparency / measurements.length;
-		}
+
 		for(var m=0; m<measurements.length; m++){
 			var measurement = measurements[m];
 			// set the scale functons to map the points to given canvas
@@ -1082,7 +1152,15 @@ var SPE = (function () {
 			// svg draws from top left corner - therefore reverse range
 			var scaleY = d3.scaleLinear().domain([measurement.minY, measurement.maxY]).range(ranges[1]);
 			// generate the cluster groups with data appended
-			this.generateClusterGroupForSVG(svg, measurement, transparency, scaleX, scaleY, showDetails, msgObject, onClickFun);
+			this.generateClusterGroupForSVG(svg, measurement, transparency, scaleX, scaleY, msgObject, onClickFun);
+		}
+		if(appendAxis){
+			svg.append("g").attr("class", "axis")
+				.attr("transform", "translate(0," + (height - padding) + ")")
+				.call(d3.axisBottom(scaleX).ticks(0));
+			svg.append("g").attr("class", "axis")
+				.attr("transform", "translate(" + padding + ",0)")
+				.call(d3.axisLeft(scaleY).ticks(0));
 		}
 		// for inline return svg element
 		return {
@@ -1095,16 +1173,21 @@ var SPE = (function () {
 	// ---
 	// Description: Using the measurement plots the scatter plot as selector child
 	// ---
-	SPE.prototype.plotScatterPlot = function(selector, measurement, width, height, showDetails, idObject, msgObject, onClickFun){
-		var sp = this.plotScatterPlotInline(selector, [measurement], width, height, showDetails, idObject);
+	SPE.prototype.plotScatterPlot = function(selector, measurement, width, height, showDetails, msgObject, onClickFun){
+		var sp = this.plotScatterPlotInline(selector, [measurement], width, height);
 		sp.svg.selectAll("rect").append("title").text("" + msgObject);
 		sp.svg.classed("inline",false);
-		if(showDetails){		
+		if(showDetails){
 			// set the scale functons to map the points to given canvas
 			var scaleX = d3.scaleLinear().domain([measurement.minX, measurement.maxX]).range(sp.ranges[0]);
 			// svg draws from top left corner - therefore reverse range
 			var scaleY = d3.scaleLinear().domain([measurement.minY, measurement.maxY]).range(sp.ranges[1]);
 			// define axis
+			sp.svg.classed("detail", true);
+			sp.svg.selectAll("svg > g > g").append("text")
+				.text(function(pair){return pair.join(",")})
+				.attr("x", function(pair){return scaleX(measurement.getX(pair));})
+				.attr("y", function(pair){return scaleY(measurement.getY(pair));});	
 			sp.svg.append("g").attr("class", "axis")
 				.attr("transform", "translate(0," + (height - sp.padding) + ")")
 				.call(d3.axisBottom(scaleX).ticks(5));
@@ -1131,7 +1214,7 @@ var SPE = (function () {
 		// check if function
 		if(this.checkFunctionType(onClickFun)){
 			// call function with measure as parameter - may be ignored
-			sp.svg.on("click", function(){ var element = this; onClickFun(element, measurement);});
+			sp.svg.on("click", function(){onClickFun(measurement);});
 		}
 		return sp;
 	}
@@ -1139,7 +1222,7 @@ var SPE = (function () {
 	// ---
 	// Description: Using the measurement plots the scatter plot as selector child
 	// ---
-	SPE.prototype.plotScatterPlotMatrix = function(selector, measurement_indices, width, height, showDetails, idFun, msgFun, onClickFun){
+	SPE.prototype.plotScatterPlotMatrix = function(selector, measurement_indices, width, height, showDetails, msgFun, onClickFun){
 		var border = 3.2; // == 0.2em right/bottom border of svg
 		var max_cols = Math.floor(width / (this.matrix_sp_min_width + border));
 		var max_rows = Math.floor(height / (this.matrix_sp_min_height + border));
@@ -1179,7 +1262,6 @@ var SPE = (function () {
 								sp_width,
 								sp_height,
 								showDetails,
-								idFun(this.measurements[measurement_indices[m]]),
 								msgFun(this.measurements[measurement_indices[m]]),
 								onClickFun
 		);
@@ -1200,18 +1282,147 @@ var SPE = (function () {
 		return [window.innerWidth - this.canvas_window_subtraction_width, window.innerHeight - this.canvas_window_subtraction_height];
 	}
 
+
+		// ---
+	// Description: helper function for duplicated inputs on meta filtering
+	// ---
+	SPE.prototype.generateMetaInputs = function(){
+		var self = this;
+		var mGUI = [["No metadata type selected", -1]];
+		// prepare representatives for gui
+		for(var mi=0; mi<this.meta_order.length; mi++){
+			mGUI.push([this.meta_order[mi], mi]);	//name value
+		}
+		onChangeFun = function(value){
+			self.selected_cluster_filter_type = value;
+			var dropdown = d3.select("#plot-element-2-select");
+			var options = dropdown.selectAll("option");
+			options.remove();
+			if(value > 0){
+				options.data(self.cluster_of_clusters.metaToArrays()[value].concat(["No filter selected"]))
+					.enter().append("option")
+						.text(function(d){return d;})
+						.attr("value",function(d){return d;})
+						.sort(function(a,b){
+							if(a == "No filter selected") return -1;
+							if(b == "No filter selected") return 1;
+							// else order by alfabet
+							return (a[0] < b[0]) ? -1 : (a[0] > b[0]) ? 1 : 0;
+				});
+				dropdown.node().value = "No filter selected";
+				dropdown.attr("disabled",null)
+			}
+			else{
+				dropdown.attr("disabled",true)
+			}
+		};
+		onSubmitFun = function(value){
+			console.log(value)
+			// hide inline elements without selected value - we have only 1 svg
+			if(value && value != "No filter selected"){
+				self.selected_cluster_filter_value = value;
+				d3.select("#canvas").selectAll("svg > g").classed("hidden",function(m){
+					for(var c=0; c < self.cluster_of_clusters.size; c++){
+						var mc = self.cluster_of_clusters.getMember(c);
+						if(mc.id == m.dbscan_cluster){	//ID not always index number
+							return !mc.unique_metas[self.selected_cluster_filter_type].has(value);
+						}
+					}
+				});
+			}
+			else{
+				self.selected_cluster_filter_value = undefined;
+			}
+		};
+		return {
+			structure: mGUI,
+			onChangeFun: onChangeFun,
+			onSubmitFun: onSubmitFun
+		}
+	}
+
 	// ---
 	// Description: use cluster of clusters centers to plot a matrix or inline scatter plots of represantatives
 	// ---
 	SPE.prototype.plotRepresentatives = function(){
+		var represantatives = [], represantatives_GUI = [["No cluster selected", -1]];
+		var self = this;
+		// helper function
+		var clusterPlotFun = function(m){
+			self.clearGeneratedElements();
+			self.hideMenu(true);
+			self.hideLoading(false);
+			for(var c=0; c < self.cluster_of_clusters.size; c++){
+				if(self.cluster_of_clusters.getMember(c).id == m.dbscan_cluster){	//ID not always index number
+					self.selected_cluster_index = c;
+					break;
+				}
+			}
+			self.plotClusterMeasurements(self.cluster_of_clusters.getMember(self.selected_cluster_index));
+		};
+
 		// select correct gui
 		switch(this.selected_cluster_rendering){
 			case "matrix":
-				// enable form for inside cluster sor_indicesting - sorts also automatically
+				// prepare representatives
+				for(var c=0; c<this.clusters.length; c++){
+					var canAdd = true;
+					if(this.selected_cluster_filter == "meta" && this.selected_cluster_filter_type >= 0  && this.selected_cluster_filter_value){
+						canAdd = this.clusters[c].unique_metas[this.selected_cluster_filter_type].has(this.selected_cluster_filter_value);
+					}
+					if(canAdd){
+						represantatives.push(this.clusters[c].center_index);	
+					}
+				}
+				// enable form for inside cluster sort_indices - sorts also automatically
 				this.selectSortGUI("cluster");	
 				break;
 			case "inline":
-				this.selectInlinePlotGUI();
+				var sortFun, onChangeFun, onSubmitFun;
+				// prepare representatives for inline and gui
+				for(var c=0; c<this.clusters.length; c++){
+					represantatives.push(this.measurements[this.clusters[c].center_index]);
+				}
+				switch(this.selected_cluster_filter){
+					case "cluster":
+						// prepare representatives for gui
+						for(var c=0; c<this.clusters.length; c++){
+							represantatives_GUI.push([this.clusters[c].id, c]);	//name value
+						}
+						onChangeFun = function(value){
+							// highlight measurement group
+							var center_doi = self.measurements[self.clusters[value].center_index].doi;
+							// inline means only 1 svg in canvas
+							d3.select("#canvas").selectAll("svg > g").classed("selected-group", function(m){
+								return m.doi == center_doi;
+						})};
+						onSubmitFun = function(value){
+							// open cluster as new plot
+							clusterPlotFun(self.measurements[self.clusters[value].center_index]);
+						};
+						break;
+					case "meta":
+						var metaInputs = self.generateMetaInputs();
+						represantatives_GUI = metaInputs.structure;
+						onChangeFun = metaInputs.onChangeFun;
+						onSubmitFun = metaInputs.onSubmitFun;
+						break;
+					default:
+						throw "Unknown " + this.selected_cluster_filtering + " inline render";
+
+				}
+				sortFun = function(a,b){
+					//sort function [name, value]
+					// first handle NONE element - move to left
+					if(a[0] == represantatives_GUI[0][0]) return -1;
+					if(b[0] == represantatives_GUI[0][0]) return 1;
+					// else order by alfabet
+					return (a[0] < b[0]) ? -1 : (a[0] > b[0]) ? 1 : 0;
+				};
+				this.selectInlinePlotGUI(represantatives_GUI,
+					sortFun,
+					onChangeFun,
+					onSubmitFun);
 				break;
 			default:
 				throw "Unknown " + this.selected_cluster_rendering + " rendering of clusters";
@@ -1223,11 +1434,8 @@ var SPE = (function () {
 
 		// consistent values
 		var canvas = d3.select("#canvas");
-		var represantatives = [];
 		var canvasDim = this.calculateCanvasDim();
 		canvasDim[1] -= this.canvas_window_subtraction_sort_form;
-		var showDetails = false;
-		var self = this;
 		var clusterInfoFun = function(m){
 			var center = self.measurements[self.cluster_of_clusters.center_index.center_index];
 			var farthest = self.measurements[self.cluster_of_clusters.farthest_from_center_index.center_index];
@@ -1244,48 +1452,33 @@ var SPE = (function () {
 			}
 			return m_type + "\n" + self.cluster_of_clusters.getMember(m.dbscan_cluster);
 		};
-		var clusterPlotFun = function(element, m){
-			// cluster id is also cluster index in cluster of clusters, while cluster list is sorted
-			self.selected_cluster_id = parseInt(element.id.split("-")[0].split(":")[1]);
-			self.clearGeneratedElements();
-			self.hideMenu(true);
-			self.hideLoading(false);
-			self.plotClusterMeasurements(self.cluster_of_clusters.getMember(self.selected_cluster_id));
-		};
 
 		// start plotting
 		switch(this.selected_cluster_rendering){
 			case "matrix":
-				// prepare representatives
-				for(var c=0; c<this.clusters.length; c++){
-					represantatives.push(this.clusters[c].center_index);
-				}
 				this.plotScatterPlotMatrix(
 					canvas,
 					represantatives,
 					canvasDim[0],
 					canvasDim[1],
-					showDetails,
-					function(m){ return "Cluster:"+ m.dbscan_cluster +"-Measurement:" + m.doi;},
+					false,
 					clusterInfoFun,
 					clusterPlotFun
 				);
 				break;
 			case "inline":
-				// prepare representatives
-				for(var c=0; c<this.clusters.length; c++){
-					represantatives.push(this.measurements[this.clusters[c].center_index]);
-				}
 				this.plotScatterPlotInline(
 					canvas,
 					represantatives,
 					canvasDim[0],
 					canvasDim[1],
-					showDetails,
-					function(m){ return "InlineClusterOverview:";},
+					true,
 					clusterInfoFun,
 					clusterPlotFun
 				);
+				if(this.selected_cluster_filter == "meta" && this.selected_cluster_filter_type >= 0  && this.selected_cluster_filter_value){
+					onSubmitFun(this.selected_cluster_filter_value);
+				}
 				break;
 			default:
 				throw "Unknown " + this.selected_cluster_rendering + " rendering of clusters";
@@ -1305,7 +1498,6 @@ var SPE = (function () {
 		var canvas = d3.select("#canvas");
 		var canvasDim = this.calculateCanvasDim();
 		var canvasHeight = canvasDim[1] - this.canvas_window_subtraction_sort_form;
-		var showDetails = false;
 		var self = this;
 		var clusterInfoFun = function(m){
 			var center = self.measurements[cluster.center_index];
@@ -1323,7 +1515,7 @@ var SPE = (function () {
 			}
 			return m_type + "\n" + m;
 		};
-		var clusterPlotFun = function(element, m){
+		var clusterPlotFun = function(m){
 			self.clearGeneratedElements();
 			self.hideCanvas(false);
 			self.hideMenuItem("menu-sp",false);
@@ -1336,6 +1528,14 @@ var SPE = (function () {
 		// start plotting
 		switch(this.selected_cluster_rendering){
 			case "matrix":
+				if(this.selected_cluster_filter == "meta" && this.selected_cluster_filter_type >= 0  && this.selected_cluster_filter_value){
+					this.selected_cluster_measurment_indices = [];
+					for(var m=0; m<cluster.size; m++){
+						if(cluster.unique_metas[this.selected_cluster_filter_type].has(this.selected_cluster_filter_value)){
+							this.selected_cluster_measurment_indices.push(cluster.getMember(m));
+						}
+					}
+				}
 				// enable form for inside cluster sorting - sorts also automatically
 				this.selectSortGUI("measurement", cluster);
 				this.plotScatterPlotMatrix(
@@ -1343,29 +1543,69 @@ var SPE = (function () {
 					this.selected_cluster_measurment_indices,
 					canvasDim[0],
 					canvasHeight,
-					showDetails,
-					function(m){ return "Cluster:"+ m.dbscan_cluster +"-Measurement:" + m.doi;},
+					false,
 					clusterInfoFun,
 					clusterPlotFun
 				);
 				break;
 			case "inline":
-				this.selectInlinePlotGUI();
 				// prepare representatives
-				var selected_cluster_measurments = [];
+				var selected_cluster_measurments = [], m_GUI =[["No measurement selected", -1]];
 				for(var sm=0; sm<this.selected_cluster_measurment_indices.length; sm++){
+					m_GUI.push([this.measurements[this.selected_cluster_measurment_indices[sm]].doi, sm]);	//name value
 					selected_cluster_measurments.push(this.measurements[this.selected_cluster_measurment_indices[sm]]);
 				}
+				var sortFun, onChangeFun, onSubmitFun;
+				switch(this.selected_cluster_filter){
+					case "cluster":
+						onChangeFun = function(value){
+							// highlight measurement group
+							var center_doi = self.measurements[self.clusters[value].center_index].doi;
+							// inline means only 1 svg in canvas
+							d3.select("#canvas").selectAll("svg > g").classed("selected-group", function(m){
+								return m.doi == center_doi;
+							});
+						}
+						onSubmitFun =  function(value){
+							// open cluster as new plot
+							clusterPlotFun(self.measurements[self.clusters[value].center_index]);
+						}
+						break;
+					case "meta":
+						var metaInputs = self.generateMetaInputs();
+						m_GUI = metaInputs.structure;
+						onChangeFun = metaInputs.onChangeFun;
+						onSubmitFun = metaInputs.onSubmitFun;
+						break;
+					default:
+						throw "Unknown " + this.selected_cluster_filtering + " inline render";
+
+				}
+				sortFun = function(a,b){
+					//sort function [name, value]
+					// first handle NONE element - move to left
+					if(a[0] == m_GUI[0][0]) return -1;
+					if(b[0] == m_GUI[0][0]) return 1;
+					// else order by alfabet
+					return (a[0] < b[0]) ? -1 : (a[0] > b[0]) ? 1 : 0;
+				};
+
+				this.selectInlinePlotGUI(m_GUI,
+					sortFun,
+					onChangeFun,
+					onSubmitFun);
 				this.plotScatterPlotInline(
 					canvas,
 					selected_cluster_measurments,
 					canvasDim[0],
 					canvasHeight,
-					showDetails,
-					function(m){ return "Cluster:"+ m.dbscan_cluster +"-Measurement:" + m.doi;},
+					true,
 					clusterInfoFun,
 					clusterPlotFun
 				);
+				if(this.selected_cluster_filter == "meta" && this.selected_cluster_filter_type >= 0  && this.selected_cluster_filter_value){
+					onSubmitFun(this.selected_cluster_filter_value);
+				}
 				break;
 			default:
 				throw "Unknown " + this.selected_cluster_rendering + " rendering of clusters";
@@ -1430,6 +1670,24 @@ var Measurement = (function () {
 				"\n Sources: " + [this.label_src + ".csv", this.raw_src + ".data", this.fv_type + ".fv"].join(",") + " at ID=" + this.id;
 	}
 
+	// ---
+	// Description: Generate array of meta strings
+	// ---
+	Measurement.prototype.outputMeta = function () {
+		var output = [];
+		// save unique values for meta 
+		// ["ID", "X-Axis", "Y-Axis", "XY-Axis", "Timestamp", "DOI"];
+		// ignore GPS for now
+		output.push(this.id +"");
+		output.push(this.x_axis);
+		output.push(this.y_axis);
+		output.push(this.x_axis+"!"+this.y_axis);
+		output.push(this.timestamp);
+		output.push(this.doi);
+
+		return output;
+	}
+
 	return Measurement;
 })();
 
@@ -1446,6 +1704,16 @@ var Cluster = (function () {
 		this.center_index = -1;
 		this.farthest_from_center_index = -1;
 		this.farthest_from_farthest_index = -1;
+		this.outer_sorted_index = -1;
+		this.outer_cluster_index = -1;
+
+		// unique meta
+		// ignore GPS for now
+		// meta_order = ["ID", "X-Axis", "Y-Axis", "XY-Axis", "Timestamp", "DOI"];
+		this.unique_metas = [];
+		for(var mi=0; mi < 6; mi++){
+			this.unique_metas.push(new Set());
+		}
 	}
 
 	// ---
@@ -1454,6 +1722,15 @@ var Cluster = (function () {
 	Cluster.prototype.addMember = function(index){
 		this.member_indicies.push(index);
 		this.size++;
+	}
+
+		// ---
+	// Description: Add Measurement index to cluster.
+	// ---
+	Cluster.prototype.addMeta = function(measurementOutput){
+		for(var mi=0; mi < 6; mi++){
+			this.unique_metas[mi].add(measurementOutput[mi]);
+		}
 	}
 
 	// ---
@@ -1524,11 +1801,40 @@ var Cluster = (function () {
 	}
 
 	// ---
+	// Description: Set starting outer indices -- for cluster of clusters and sorted list
+	// ---
+	Cluster.prototype.setOuterIndecies = function (index) {
+		this.outer_cluster_index = index;
+		this.outer_sorted_index = index;
+	}	
+
+	// ---
 	// Description: Generate string describing the cluster
 	// ---
 	Cluster.prototype.toString = function () {
 		return "Cluster " + this.id + " has " + this.size + " measurements";
 	}
+
+	// ---
+	// Description: Array of meta arrays instead of sets
+	// ---
+	Cluster.prototype.metaToArrays = function () {
+		var metaOutput = [];
+		for(var i=0; i< this.unique_metas.length; i++){
+			metaOutput.push(Array.from(this.unique_metas[i]));
+		}
+		return metaOutput;
+	}
+
+	// ---
+	// Description: Regenerate meta sets from arrays
+	// ---
+	Cluster.prototype.metaArraysToSets = function (metaArrays) {
+		for(var i=0; i< this.unique_metas.length; i++){
+			this.unique_metas[i] = new Set(metaArrays[i]);
+		}
+	}
+
 
 	// ---
 	// Description: Generate JSON for worker data transfer
@@ -1540,6 +1846,7 @@ var Cluster = (function () {
 			"center": this.center_index,
 			"far": this.farthest_from_center_index,
 			"farfar": this.farthest_from_farthest_index,
+			"meta": this.metaToArrays()
 		};
 	}
 	// ---
@@ -1552,6 +1859,7 @@ var Cluster = (function () {
 		this.center_index = jsonValues.center;
 		this.farthest_from_center_index = jsonValues.far;
 		this.farthest_from_farthest_index = jsonValues.farfar;
+		this.metaArraysToSets(jsonValues.meta);
 	}
 
 	return Cluster;

@@ -18,6 +18,16 @@ var Cluster = (function () {
 		this.center_index = -1;
 		this.farthest_from_center_index = -1;
 		this.farthest_from_farthest_index = -1;
+		this.outer_sorted_index = -1;
+		this.outer_cluster_index = -1;
+
+		// unique meta
+		// ignore GPS for now
+		// meta_order = ["ID", "X-Axis", "Y-Axis", "XY-Axis", "Timestamp", "DOI"];
+		this.unique_metas = [];
+		for(var mi=0; mi < 6; mi++){
+			this.unique_metas.push(new Set());
+		}
 	}
 
 	// ---
@@ -26,6 +36,15 @@ var Cluster = (function () {
 	Cluster.prototype.addMember = function(index){
 		this.member_indicies.push(index);
 		this.size++;
+	}
+
+		// ---
+	// Description: Add Measurement index to cluster.
+	// ---
+	Cluster.prototype.addMeta = function(measurementOutput){
+		for(var mi=0; mi < 6; mi++){
+			this.unique_metas[mi].add(measurementOutput[mi]);
+		}
 	}
 
 	// ---
@@ -96,11 +115,40 @@ var Cluster = (function () {
 	}
 
 	// ---
+	// Description: Set starting outer indices -- for cluster of clusters and sorted list
+	// ---
+	Cluster.prototype.setOuterIndecies = function (index) {
+		this.outer_cluster_index = index;
+		this.outer_sorted_index = index;
+	}	
+
+	// ---
 	// Description: Generate string describing the cluster
 	// ---
 	Cluster.prototype.toString = function () {
 		return "Cluster " + this.id + " has " + this.size + " measurements";
 	}
+
+	// ---
+	// Description: Array of meta arrays instead of sets
+	// ---
+	Cluster.prototype.metaToArrays = function () {
+		var metaOutput = [];
+		for(var i=0; i< this.unique_metas.length; i++){
+			metaOutput.push(Array.from(this.unique_metas[i]));
+		}
+		return metaOutput;
+	}
+
+	// ---
+	// Description: Regenerate meta sets from arrays
+	// ---
+	Cluster.prototype.metaArraysToSets = function (metaArrays) {
+		for(var i=0; i< this.unique_metas.length; i++){
+			this.unique_metas[i] = new Set(metaArrays[i]);
+		}
+	}
+
 
 	// ---
 	// Description: Generate JSON for worker data transfer
@@ -112,6 +160,7 @@ var Cluster = (function () {
 			"center": this.center_index,
 			"far": this.farthest_from_center_index,
 			"farfar": this.farthest_from_farthest_index,
+			"meta": this.metaToArrays()
 		};
 	}
 	// ---
@@ -124,10 +173,12 @@ var Cluster = (function () {
 		this.center_index = jsonValues.center;
 		this.farthest_from_center_index = jsonValues.far;
 		this.farthest_from_farthest_index = jsonValues.farfar;
+		this.metaArraysToSets(jsonValues.meta);
 	}
 
 	return Cluster;
 })();
+
 
 var measurements = [];
 var eps = 0;
@@ -139,6 +190,20 @@ var start_time = null;
 var total_time = 0;
 var line_seperator = "\n" + Array(40).join("-") + "\n";
 
+function outputMeta(m){
+	var output = [];
+	// save unique values for meta 
+	// ["ID", "X-Axis", "Y-Axis", "XY-Axis", "Timestamp", "DOI"];
+	// ignore GPS for now
+	output.push(m.id +"");
+	output.push(m.x_axis);
+	output.push(m.y_axis);
+	output.push(m.x_axis+"!"+m.y_axis);
+	output.push(m.timestamp);
+	output.push(m.doi);
+
+	return output;
+}
 
 function measurementDistance(m1, m2){
 	var squaredSum = 0;
@@ -183,6 +248,7 @@ function expandCluster(cluster, region){
 		}
 		if(measurements[index].dbscan_cluster < 0){
 			cluster.addMember(index);
+			cluster.addMeta(outputMeta(measurements[index]));
 			measurements[index].dbscan_cluster = cluster.id;
 		}
 	}

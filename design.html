@@ -44,7 +44,8 @@
 							id : m,
 							x_axis: "X",
 							y_axis: "Y",
-							doi: "DOI:" + m
+							doi: "DOI:" + m,
+							timestamp: "TODAY"
 						},
 						{
 							id: m,
@@ -56,6 +57,7 @@
 							features: [m]
 						});
 					testC[m] = new Cluster(m);
+					testC[m].metaArraysToSets([[m],["X"+m],["y"+m],["HAHA"],["TODAY"],["DOI:"+m]]);
 					for(var c=0; c <= m; c++){
 						testC[m].addMember(c);
 					}
@@ -71,7 +73,7 @@
 				//spe.rundWorkerForDBSCAN();
 
 
-			spe.clusters = testC;
+				spe.clusters = testC;
 				spe.prepareCenterCluster();
 				//spe.selectDataGUI();
 				spe.plotRepresentatives();
