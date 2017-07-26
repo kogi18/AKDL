@@ -47,6 +47,7 @@ var SPE = (function () {
 		this.cluster_of_clusters = null;
 		this.marked_as_noise = [];
 		this.selected_sorting = "fromcenter";
+		this.selected_cluster_rendering = "matrix";
 		// useful constants
 		this.string_line_seperator = "\n" + Array(40).join("-") + "\n";
 		this.matrix_sp_min_width = 300;
@@ -402,7 +403,8 @@ var SPE = (function () {
 			self.hideMenuItem("menu-cluster",true);
 			self.hideMenuItem("menu-sp",true);
 			self.clearGeneratedElements();
-			self.plotRepresentativeMatrix();
+			self.selected_cluster_rendering = "matrix";
+			self.plotRepresentatives();
 
 		});
 		d3.select("#menu-inline-overview").on("click", function(){
@@ -410,17 +412,20 @@ var SPE = (function () {
 			self.hideMenuItem("menu-cluster",true);
 			self.hideMenuItem("menu-sp",true);
 			self.clearGeneratedElements();
-			self.plotRepresentativeInline();
+			self.selected_cluster_rendering = "inline";
+			self.plotRepresentatives();
 		});
 		d3.select("#menu-matrix-cluster").on("click", function(){
 			self.hideMenuItem("menu-sp",true);
 			self.clearGeneratedElements();
-			self.plotClusterAsMatrix(self.cluster_of_clusters.getMember(self.selected_cluster_id));
+			self.selected_cluster_rendering = "matrix";
+			self.plotClusterMeasurements(self.cluster_of_clusters.getMember(self.selected_cluster_id));
 		});
 		d3.select("#menu-inline-cluster").on("click", function(){
 			self.hideMenuItem("menu-sp",true);
 			self.clearGeneratedElements();
-			self.plotClusterAsInlineScatterPlot(self.cluster_of_clusters.getMember(self.selected_cluster_id));
+			self.selected_cluster_rendering = "inline";
+			self.plotClusterMeasurements(self.cluster_of_clusters.getMember(self.selected_cluster_id));
 		});
 	}
 
@@ -683,7 +688,7 @@ var SPE = (function () {
 		this.hideLoading(true);
 		this.hideMenu(false);
 		this.hideMenuItem("menu-overview", false);
-		this.plotRepresentativeMatrix();
+		this.plotRepresentatives();
 	}
 
 	// ---
@@ -969,10 +974,10 @@ var SPE = (function () {
 			d3.select("#form").selectAll("div").remove();
 			type = type.toLowerCase();
 			if(type == "cluster"){
-				self.plotRepresentativeMatrix();
+				self.plotRepresentatives();
 			}
 			else if(type == "measurement"){
-				self.plotClusterAsMatrix(cluster);
+				self.plotClusterMeasurements(cluster);
 			}
 			else{
 				throw "Unknown type: " + type;
@@ -984,81 +989,157 @@ var SPE = (function () {
 	}
 
 	// ---
-	// Description: Using the measurement plots the scatter plot as selector child
+	// Description: Generate a form with a dropdown of possible sorts
 	// ---
-	SPE.prototype.plotScatterPlot = function(selector, measurement, width, height, showDetails, msgObject, onClickFun){
-		// since we want all points inside the canvas, we need a padding
-		var padding = d3.min([0.1 * width, 0.1 * height]);
-		// set the scale functons to map the points to given canvas
-		var scaleX = d3.scaleLinear().domain([measurement.minX, measurement.maxX]).range([padding, width - padding]);
+	SPE.prototype.selectInlinePlotGUI = function(){
+		console.log("TO DO cluster selection on inline plot GUI");
+	}
 
-		// svg draws from top left corner - therefore reverse range
-		var scaleY = d3.scaleLinear().domain([measurement.minY, measurement.maxY]).range([height - padding, padding]);
-		// the actual SVG parts
-		var svg = selector.append("svg")
-			.attr("id", "Cluster:"+ measurement.dbscan_cluster + " " + measurement.doi)
-			.attr("width", width)
-			.attr("height",height);
-		// append bg + text to display
-		svg.append("rect").attr("width", width).attr("height",height)
-			.append("title").text("" + msgObject);
-		var plotGroup =	svg.selectAll("g").data(measurement.pairs)
-			.enter().append("g").attr("class", "pointGroup").attr("id", function(d,i){
+	// ---
+	// Description: Using the measurement generates scatter plot points
+	// ---
+	SPE.prototype.generateClusterGroupForSVG = function(svg, measurement, transparency, scaleX, scaleY, appendLabel, msgObject, onClickFun){
+		var clusterGroup = svg.selectAll("svg > g");
+		clusterGroup = clusterGroup.data(clusterGroup.data().concat([measurement]))
+			.enter().append("g")
+				.classed("measurement-group", true)
+				.attr("id", function(m) {return m.doi;});
+		var pointGroup = clusterGroup.selectAll("g > g").data(function(m) {return m.pairs;})
+			.enter().append("g")
+			.attr("class", "pointGroup").attr("id", function(d,i){
 				return measurement.doi + "["+i+"]";
-			});
+		});
+		// append title for msg object to be shown
+		if(this.checkFunctionType(msgObject)){
+			clusterGroup.append("title").text(msgObject(measurement));
+		}
+		else if(msgObject){
+			clusterGroup.append("title").text("" + msgObject);
+		}
+		// append on click function if function valid
+		if(this.checkFunctionType(onClickFun)){
+			// call function with measure as parameter - may be ignored
+			pointGroup.on("click", function(){ var element = this; onClickFun(element, measurement);});
+		}
 		// order of appending tells the order of rendering
-		plotGroup.append("circle")
+		pointGroup.append("circle")
 				.attr("cx", function(pair){return scaleX(measurement.getX(pair));})
 				.attr("cy", function(pair){return scaleY(measurement.getY(pair));})
+				.attr("fill-opacity", transparency)
 				// on hover event we want to heva text display on top of points
 				// we neeed to reorder the elements
 				.on("mouseover", function() {
-					var cx = this.cx.baseVal.value, cy = this.cy.baseVal.value;
-					svg.selectAll("g").sort(function (a, b) {
-					if (a[0] == cx && a[1] == cy) return 1;		// a is the hovered element, send "a" to the back
-					else return -1;								// a is not the hovered element, bring "a" to the front
-				})});
-		if(showDetails){
+					var pointID = parseInt(this.parentNode.id.replace(measurement.doi + "[",""));
+					var coordinates = measurement.pairs[pointID];
+					// sort inside svg - the cluster groups
+					svg.selectAll("svg > g").sort(function(a,b){
+						if(a.id == measurement.id)	return 1;
+						else return -1;
+					});
+					// sort inside cluster group
+					pointGroup.sort(function (a, b) {
+						if(a[0] == coordinates[0] && a[1] == coordinates[1]){
+							// a is the hovered element, send "a" to the back
+							return 1;				
+						}
+						// a is not the hovered element, bring "a" to the front
+						else return -1;		
+		})});
+
+		if(appendLabel){
 			svg.classed("detail", true);
-			plotGroup.append("text")
-					.text(function(pair){return pair.join(",")})
-					.attr("x", function(pair){return scaleX(measurement.getX(pair));})
-					.attr("y", function(pair){return scaleY(measurement.getY(pair));});				
-			// define axis
-			svg.append("g").attr("class", "axis")
-					.attr("transform", "translate(0," + (height - padding) + ")")
-					.call(d3.axisBottom(scaleX).ticks(5));
-			svg.append("g").attr("class", "axis")
-				.attr("transform", "translate(" + padding + ",0)")
-				.call(d3.axisLeft(scaleY).ticks(5));
-			svg.append("text")
-				.attr("class", "axisName")
-				.attr("x", width*0.5)
-				.attr("y",height - padding*0.25)
-				.text(measurement.x_axis);
-			svg.append("text")
-				.attr("class", "axisName")
-				.attr("x", -height*0.5)
-				.attr("y", padding*0.25)
-				.attr("transform", "rotate(270)")
-				.text(measurement.y_axis);
-			svg.append("text")
-				.attr("class", "axisName")
-				.attr("x", width*0.5 - measurement.doi.length)
-				.attr("y", padding*0.25)
-				.text(measurement.doi);
+			pointGroup.append("text")
+				.text(function(pair){return pair.join(",")})
+				.attr("x", function(pair){return scaleX(measurement.getX(pair));})
+				.attr("y", function(pair){return scaleY(measurement.getY(pair));});	
+		}			
+	}
+
+	// ---
+	// Description: Using the measurements plots the inline scatter plot as selector child
+	// ---
+	SPE.prototype.plotScatterPlotInline = function(selector, measurements, width, height, showDetails, idObject, msgObject, onClickFun){
+		// since we want all points inside the canvas, we need a padding
+		var padding = d3.min([0.1 * width, 0.1 * height]);
+		var ranges = [[padding, width - padding], [height - padding, padding]];
+		// the actual SVG parts
+		var svg = selector.append("svg")
+			.classed("inline", true)
+			.attr("id", idObject)
+			.attr("width", width)
+			.attr("height",height);
+		// append bg + text to display
+		svg.append("rect").attr("width", width).attr("height",height);
+		// calculate the transparency of points
+		var transparency = 1.0;
+		if(measurements.length > 0){
+			transparency = transparency / measurements.length;
 		}
-		// check if function
-		if(this.checkFunctionType(onClickFun)){
-			// call function with measure as parameter - may be ignored
-			svg.on("click", function(){ var element = this; onClickFun(element, measurement);});
+		for(var m=0; m<measurements.length; m++){
+			var measurement = measurements[m];
+			// set the scale functons to map the points to given canvas
+			var scaleX = d3.scaleLinear().domain([measurement.minX, measurement.maxX]).range(ranges[0]);
+			// svg draws from top left corner - therefore reverse range
+			var scaleY = d3.scaleLinear().domain([measurement.minY, measurement.maxY]).range(ranges[1]);
+			// generate the cluster groups with data appended
+			this.generateClusterGroupForSVG(svg, measurement, transparency, scaleX, scaleY, showDetails, msgObject, onClickFun);
 		}
+		// for inline return svg element
+		return {
+			svg: svg,
+			ranges: ranges,
+			padding: padding
+		};
 	}
 
 	// ---
 	// Description: Using the measurement plots the scatter plot as selector child
 	// ---
-	SPE.prototype.plotScatterPlotMatrix = function(selector, measurement_indices, width, height, showDetails, msgFun, onClickFun){
+	SPE.prototype.plotScatterPlot = function(selector, measurement, width, height, showDetails, idObject, msgObject, onClickFun){
+		var sp = this.plotScatterPlotInline(selector, [measurement], width, height, showDetails, idObject);
+		sp.svg.selectAll("rect").append("title").text("" + msgObject);
+		sp.svg.classed("inline",false);
+		if(showDetails){		
+			// set the scale functons to map the points to given canvas
+			var scaleX = d3.scaleLinear().domain([measurement.minX, measurement.maxX]).range(sp.ranges[0]);
+			// svg draws from top left corner - therefore reverse range
+			var scaleY = d3.scaleLinear().domain([measurement.minY, measurement.maxY]).range(sp.ranges[1]);
+			// define axis
+			sp.svg.append("g").attr("class", "axis")
+				.attr("transform", "translate(0," + (height - sp.padding) + ")")
+				.call(d3.axisBottom(scaleX).ticks(5));
+			sp.svg.append("g").attr("class", "axis")
+				.attr("transform", "translate(" + sp.padding + ",0)")
+				.call(d3.axisLeft(scaleY).ticks(5));
+			sp.svg.append("text")
+				.attr("class", "axisName")
+				.attr("x", width*0.5)
+				.attr("y",height - sp.padding*0.25)
+				.text(measurement.x_axis);
+			sp.svg.append("text")
+				.attr("class", "axisName")
+				.attr("x", -height*0.5)
+				.attr("y", sp.padding*0.25)
+				.attr("transform", "rotate(270)")
+				.text(measurement.y_axis);
+			sp.svg.append("text")
+				.attr("class", "axisName")
+				.attr("x", width*0.5 - measurement.doi.length)
+				.attr("y", sp.padding*0.25)
+				.text(measurement.doi);
+		}
+		// check if function
+		if(this.checkFunctionType(onClickFun)){
+			// call function with measure as parameter - may be ignored
+			sp.svg.on("click", function(){ var element = this; onClickFun(element, measurement);});
+		}
+		return sp;
+	}
+
+	// ---
+	// Description: Using the measurement plots the scatter plot as selector child
+	// ---
+	SPE.prototype.plotScatterPlotMatrix = function(selector, measurement_indices, width, height, showDetails, idFun, msgFun, onClickFun){
 		var border = 3.2; // == 0.2em right/bottom border of svg
 		var max_cols = Math.floor(width / (this.matrix_sp_min_width + border));
 		var max_rows = Math.floor(height / (this.matrix_sp_min_height + border));
@@ -1093,10 +1174,17 @@ var SPE = (function () {
 		}
 
 		for(var m=0; m < measurement_indices.length; m++){
-			this.plotScatterPlot(selector, this.measurements[measurement_indices[m]], sp_width, sp_height, showDetails, msgFun(this.measurements[measurement_indices[m]]), onClickFun);
+			this.plotScatterPlot(selector,
+								this.measurements[measurement_indices[m]],
+								sp_width,
+								sp_height,
+								showDetails,
+								idFun(this.measurements[measurement_indices[m]]),
+								msgFun(this.measurements[measurement_indices[m]]),
+								onClickFun
+		);
 		}
 	}
-
 	// ---
 	// Description: helper to check if function is really a function
 	// ---
@@ -1113,117 +1201,180 @@ var SPE = (function () {
 	}
 
 	// ---
-	// Description: use this.cluster centers to plot a matrix  of scatter plot represantatives
+	// Description: use cluster of clusters centers to plot a matrix or inline scatter plots of represantatives
 	// ---
-	SPE.prototype.plotRepresentativeMatrix = function(){
-		// enable form for inside cluster sor_indicesting - sorts also automatically
-		this.selectSortGUI("cluster");		
+	SPE.prototype.plotRepresentatives = function(){
+		// select correct gui
+		switch(this.selected_cluster_rendering){
+			case "matrix":
+				// enable form for inside cluster sor_indicesting - sorts also automatically
+				this.selectSortGUI("cluster");	
+				break;
+			case "inline":
+				this.selectInlinePlotGUI();
+				break;
+			default:
+				throw "Unknown " + this.selected_cluster_rendering + " rendering of clusters";
+		}
+		// show only loading before plot finished	
 		this.hideCanvas(false);
 		this.hideMenu(false);
 		this.hideLoading(true);
+
+		// consistent values
+		var canvas = d3.select("#canvas");
 		var represantatives = [];
-		for(var c=0; c<this.clusters.length; c++){
-			represantatives.push(this.clusters[c].center_index);
-		}
-		// start plotting
 		var canvasDim = this.calculateCanvasDim();
+		canvasDim[1] -= this.canvas_window_subtraction_sort_form;
+		var showDetails = false;
 		var self = this;
-		this.plotScatterPlotMatrix(d3.select("#canvas"),
-									represantatives,
-									canvasDim[0],
-									canvasDim[1] - this.canvas_window_subtraction_sort_form,
-									false,
-									function(m){
+		var clusterInfoFun = function(m){
+			var center = self.measurements[self.cluster_of_clusters.center_index.center_index];
+			var farthest = self.measurements[self.cluster_of_clusters.farthest_from_center_index.center_index];
+			var farthestfarthest = self.measurements[self.cluster_of_clusters.farthest_from_farthest_index.center_index];
+			var m_type = ""; // just 1 of many
+			if(center.doi == m.doi){
+				m_type += "Center Cluster ";	//center index
+			}
+			if(farthest.doi == m.doi){
+				m_type += "Farthest From Center Cluster ";	//Farthest index
+			}
+			if(farthestfarthest.doi == m.doi){
+				m_type += "Farthest From Farthest Cluster ";	//Farthest index
+			}
+			return m_type + "\n" + self.cluster_of_clusters.getMember(m.dbscan_cluster);
+		};
+		var clusterPlotFun = function(element, m){
+			// cluster id is also cluster index in cluster of clusters, while cluster list is sorted
+			self.selected_cluster_id = parseInt(element.id.split("-")[0].split(":")[1]);
+			self.clearGeneratedElements();
+			self.hideMenu(true);
+			self.hideLoading(false);
+			self.plotClusterMeasurements(self.cluster_of_clusters.getMember(self.selected_cluster_id));
+		};
 
-										var center = self.measurements[self.cluster_of_clusters.center_index.center_index];
-										var farthest = self.measurements[self.cluster_of_clusters.farthest_from_center_index.center_index];
-										var farthestfarthest = self.measurements[self.cluster_of_clusters.farthest_from_farthest_index.center_index];
-										var m_type = ""; // just 1 of many
-										if(center.doi == m.doi){
-											m_type += "Center Cluster ";	//center index
-										}
-										if(farthest.doi == m.doi){
-											m_type += "Farthest From Center Cluster ";	//Farthest index
-										}
-										if(farthestfarthest.doi == m.doi){
-											m_type += "Farthest From Farthest Cluster ";	//Farthest index
-										}
-										return m_type + "\n" + self.cluster_of_clusters.getMember(m.dbscan_cluster);
-									},
-									function(element, m){
-										// cluster id is also cluster index in cluster of clusters, while cluster list is sorted
-										self.selected_cluster_id = parseInt(element.id.split(" ")[0].split(":")[1]);
-										self.clearGeneratedElements();
-										self.hideMenu(true);
-										self.hideLoading(false);
-										setTimeout(function(){
-											self.plotClusterAsMatrix(self.cluster_of_clusters.getMember(self.selected_cluster_id));
-										})
-		});
+		// start plotting
+		switch(this.selected_cluster_rendering){
+			case "matrix":
+				// prepare representatives
+				for(var c=0; c<this.clusters.length; c++){
+					represantatives.push(this.clusters[c].center_index);
+				}
+				this.plotScatterPlotMatrix(
+					canvas,
+					represantatives,
+					canvasDim[0],
+					canvasDim[1],
+					showDetails,
+					function(m){ return "Cluster:"+ m.dbscan_cluster +"-Measurement:" + m.doi;},
+					clusterInfoFun,
+					clusterPlotFun
+				);
+				break;
+			case "inline":
+				// prepare representatives
+				for(var c=0; c<this.clusters.length; c++){
+					represantatives.push(this.measurements[this.clusters[c].center_index]);
+				}
+				this.plotScatterPlotInline(
+					canvas,
+					represantatives,
+					canvasDim[0],
+					canvasDim[1],
+					showDetails,
+					function(m){ return "InlineClusterOverview:";},
+					clusterInfoFun,
+					clusterPlotFun
+				);
+				break;
+			default:
+				throw "Unknown " + this.selected_cluster_rendering + " rendering of clusters";
+		}
 	}
 
-
 	// ---
-	// Description: use this.cluster centers to plot a matrix of inline scatter plots
+	// Description: use given cluster to plot a matrix or inline scatter plots of cluster 
 	// ---
-	SPE.prototype.plotRepresentativeInline = function(){
-		alert("TO DO");
-	}
-
-	// ---
-	// Description: use given cluster to plot a matrix of cluster scatter plots
-	// ---
-	SPE.prototype.plotClusterAsMatrix = function(cluster){
+	SPE.prototype.plotClusterMeasurements = function(cluster){
 		this.selected_cluster_measurment_indices = [];
 		for(var m=0; m<cluster.size; m++){
 			this.selected_cluster_measurment_indices.push(cluster.getMember(m));
 		}
-		// enable form for inside cluster sorting - sorts also automatically
-		this.selectSortGUI("measurement", cluster);
+
+		// consistent values
+		var canvas = d3.select("#canvas");
+		var canvasDim = this.calculateCanvasDim();
+		var canvasHeight = canvasDim[1] - this.canvas_window_subtraction_sort_form;
+		var showDetails = false;
+		var self = this;
+		var clusterInfoFun = function(m){
+			var center = self.measurements[cluster.center_index];
+			var farthest = self.measurements[cluster.farthest_from_center_index];
+			var farthestfarthest = self.measurements[cluster.farthest_from_farthest_index];
+			var m_type = ""; // just 1 of many
+			if(center.doi == m.doi){
+				m_type += "Center Measurement ";	//center index
+			}
+			if(farthest.doi == m.doi){
+				m_type += "Farthest From Center Measurement ";	//Farthest index
+			}
+			if(farthestfarthest.doi == m.doi){
+				m_type += "Farthest From Farthest Measurement ";	//Farthest index
+			}
+			return m_type + "\n" + m;
+		};
+		var clusterPlotFun = function(element, m){
+			self.clearGeneratedElements();
+			self.hideCanvas(false);
+			self.hideMenuItem("menu-sp",false);
+			// correct canvas size
+			d3.select("#canvas").style("height", "100%");
+			// +13 because we hide scrollbar
+			self.plotScatterPlot(d3.select("#canvas"), m, canvasDim[0] + 13, canvasDim[1], true, m, null);
+		};
+
+		// start plotting
+		switch(this.selected_cluster_rendering){
+			case "matrix":
+				// enable form for inside cluster sorting - sorts also automatically
+				this.selectSortGUI("measurement", cluster);
+				this.plotScatterPlotMatrix(
+					canvas,
+					this.selected_cluster_measurment_indices,
+					canvasDim[0],
+					canvasHeight,
+					showDetails,
+					function(m){ return "Cluster:"+ m.dbscan_cluster +"-Measurement:" + m.doi;},
+					clusterInfoFun,
+					clusterPlotFun
+				);
+				break;
+			case "inline":
+				this.selectInlinePlotGUI();
+				// prepare representatives
+				var selected_cluster_measurments = [];
+				for(var sm=0; sm<this.selected_cluster_measurment_indices.length; sm++){
+					selected_cluster_measurments.push(this.measurements[this.selected_cluster_measurment_indices[sm]]);
+				}
+				this.plotScatterPlotInline(
+					canvas,
+					selected_cluster_measurments,
+					canvasDim[0],
+					canvasHeight,
+					showDetails,
+					function(m){ return "Cluster:"+ m.dbscan_cluster +"-Measurement:" + m.doi;},
+					clusterInfoFun,
+					clusterPlotFun
+				);
+				break;
+			default:
+				throw "Unknown " + this.selected_cluster_rendering + " rendering of clusters";
+		}
+		// show needed elements
 		this.hideCanvas(false);
 		this.hideMenu(false);
 		this.hideLoading(true);
 		this.hideMenuItem("menu-cluster",false);
-		// start plotting
-		var canvasDim = this.calculateCanvasDim();
-		var self = this;
-		this.plotScatterPlotMatrix(d3.select("#canvas"),
-									this.selected_cluster_measurment_indices,
-									canvasDim[0],
-									canvasDim[1] - this.canvas_window_subtraction_sort_form,
-									false,
-									function(m){
-										var center = self.measurements[cluster.center_index];
-										var farthest = self.measurements[cluster.farthest_from_center_index];
-										var farthestfarthest = self.measurements[cluster.farthest_from_farthest_index];
-										var m_type = ""; // just 1 of many
-										if(center.doi == m.doi){
-											m_type += "Center Measurement ";	//center index
-										}
-										if(farthest.doi == m.doi){
-											m_type += "Farthest From Center Measurement ";	//Farthest index
-										}
-										if(farthestfarthest.doi == m.doi){
-											m_type += "Farthest From Farthest Measurement ";	//Farthest index
-										}
-										return m_type + "\n" + m;
-									},
-									function(element, m){
-										self.clearGeneratedElements();
-										self.hideCanvas(false);
-										self.hideMenuItem("menu-sp",false);
-										// correct canvas size
-										d3.select("#canvas").style("height", "100%");
-										// +13 because we hide scrollbar
-										self.plotScatterPlot(d3.select("#canvas"), m, canvasDim[0] + 13, canvasDim[1], true, m, null);
-		});
-	}
-
-	// ---
-	// Description: use given cluster to plot a inline scatter plot for cluster
-	// ---
-	SPE.prototype.plotClusterAsInlineScatterPlot = function(cluster){
-		alert("TO DO");
 	}
 
 	return SPE;

@@ -117,8 +117,12 @@ nav svg #logo-magnifying-glass path,
 	fill: #F78D3F;
 }
 
-#canvas svg.detail circle:hover {
+#canvas svg.detail:not(.inline) circle:hover {
 	fill: #2BBBD8;
+}
+
+#canvas svg.detail.inline circle:hover {
+	fill: red;	/*for now*/
 }
 
 #canvas svg.detail circle:hover ~ text {
@@ -129,11 +133,11 @@ nav svg #logo-magnifying-glass path,
 	fill: #E8EDE0;
 }
 
-#canvas svg:not(.detail):hover rect{
+#canvas svg:not(.detail):not(.inline):hover rect{
 	fill: #2BBBD8;
 }
 
-#canvas svg:not(.detail):hover circle{
+#canvas svg:not(.detail):not(.inline):hover circle{
 	fill: #E8EDE0;
 }
 
