@@ -803,7 +803,7 @@ var SPE = (function () {
 				);};
 				break;
 			case "clusterfromcenter":
-				sorterFunc = function(c1,c2){
+				sorterFunc = function(c1,c2){console.log
 					return self.fromCenterSorter(
 								c1.center_index,
 								c2.center_index,
@@ -961,8 +961,10 @@ var SPE = (function () {
 					.property("selected", function(d){return d.split(" ").join("") == self.selected_sorting;});
 		d3.select("#form").append("div").classed("button",true).append("button").text("SORT").on("click", function(){
 			self.selected_sorting = d3.select("#overview-sort").node().value
+			self.clearGeneratedElements();
+			self.hideMenu(true);
+			self.hideLoading(false)
 			self.sort(self, type, self.selected_sorting, cluster);
-			self.hideForm(true);
 			d3.select("#canvas").selectAll("svg").remove();
 			d3.select("#form").selectAll("div").remove();
 			type = type.toLowerCase();
@@ -1078,18 +1080,16 @@ var SPE = (function () {
 
 		var sp_width = width / cols - border;
 		var sp_height = Math.floor(height / rows - border);
+		/*
 		console.log("Rows " + rows + "/" + max_rows + " Cols " + cols + "/" + max_cols);
 		console.log("Width " + width + "=>" + sp_width + "\nHeight " + height + "=>" + sp_height)
-		console.log(measurement_indices.length)
-
+*/
 		// fix  selector/canvas height
 		selector.style("height", height + "px");
 		// check if there is slider
 		if(cols * rows >= measurement_indices.length){
 			width += 13;
 			sp_width = width / cols - border;
-					console.log("Width " + width + "=>" + sp_width + "\nHeight " + height + "=>" + sp_height)
-
 		}
 
 		for(var m=0; m < measurement_indices.length; m++){
@@ -1116,9 +1116,11 @@ var SPE = (function () {
 	// Description: use this.cluster centers to plot a matrix  of scatter plot represantatives
 	// ---
 	SPE.prototype.plotRepresentativeMatrix = function(){
-		this.hideCanvas(false);
 		// enable form for inside cluster sor_indicesting - sorts also automatically
-		this.selectSortGUI("cluster");
+		this.selectSortGUI("cluster");		
+		this.hideCanvas(false);
+		this.hideMenu(false);
+		this.hideLoading(true);
 		var represantatives = [];
 		for(var c=0; c<this.clusters.length; c++){
 			represantatives.push(this.clusters[c].center_index);
@@ -1131,13 +1133,32 @@ var SPE = (function () {
 									canvasDim[0],
 									canvasDim[1] - this.canvas_window_subtraction_sort_form,
 									false,
-									function(m){ return self.cluster_of_clusters.getMember(m.dbscan_cluster);},
+									function(m){
+
+										var center = self.measurements[self.cluster_of_clusters.center_index.center_index];
+										var farthest = self.measurements[self.cluster_of_clusters.farthest_from_center_index.center_index];
+										var farthestfarthest = self.measurements[self.cluster_of_clusters.farthest_from_farthest_index.center_index];
+										var m_type = ""; // just 1 of many
+										if(center.doi == m.doi){
+											m_type += "Center Cluster ";	//center index
+										}
+										if(farthest.doi == m.doi){
+											m_type += "Farthest From Center Cluster ";	//Farthest index
+										}
+										if(farthestfarthest.doi == m.doi){
+											m_type += "Farthest From Farthest Cluster ";	//Farthest index
+										}
+										return m_type + "\n" + self.cluster_of_clusters.getMember(m.dbscan_cluster);
+									},
 									function(element, m){
 										// cluster id is also cluster index in cluster of clusters, while cluster list is sorted
 										self.selected_cluster_id = parseInt(element.id.split(" ")[0].split(":")[1]);
 										self.clearGeneratedElements();
-										self.hideCanvas(false);
-										self.plotClusterAsMatrix(self.cluster_of_clusters.getMember(self.selected_cluster_id));
+										self.hideMenu(true);
+										self.hideLoading(false);
+										setTimeout(function(){
+											self.plotClusterAsMatrix(self.cluster_of_clusters.getMember(self.selected_cluster_id));
+										})
 		});
 	}
 
@@ -1153,14 +1174,16 @@ var SPE = (function () {
 	// Description: use given cluster to plot a matrix of cluster scatter plots
 	// ---
 	SPE.prototype.plotClusterAsMatrix = function(cluster){
-		this.hideCanvas(false);
-		this.hideMenuItem("menu-cluster",false);
-		// enable form for inside cluster sorting - sorts also automatically
-		this.selectSortGUI("measurement", cluster);
 		this.selected_cluster_measurment_indices = [];
 		for(var m=0; m<cluster.size; m++){
 			this.selected_cluster_measurment_indices.push(cluster.getMember(m));
 		}
+		// enable form for inside cluster sorting - sorts also automatically
+		this.selectSortGUI("measurement", cluster);
+		this.hideCanvas(false);
+		this.hideMenu(false);
+		this.hideLoading(true);
+		this.hideMenuItem("menu-cluster",false);
 		// start plotting
 		var canvasDim = this.calculateCanvasDim();
 		var self = this;

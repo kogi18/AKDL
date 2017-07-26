@@ -192,8 +192,8 @@ function expandCluster(cluster, region){
 }
 
 function dbscan(){
-	for(var m=0; m < measurements.length; m++){
 		start_time = performance.now();
+	for(var m=0; m < measurements.length; m++){
 		postMessage({ 'cmd': "console", "console" : "DBSCAN M = " + m + "/" + measurements.length});
 		// only chack if not yet visited
 		if(!measurements[m].dbscan_visited){
@@ -206,6 +206,7 @@ function dbscan(){
 				var cluster = new Cluster(this.clusters.length);
 				expandCluster(cluster, region);
 				var time = Math.floor(performance.now() - start_time);
+				start_time = performance.now();
 				total_time += time;
 				postMessage({ 'cmd': "msg", "msg" : "DBSCAN" + line_seperator + "\nMeasurement " + m + "/" + measurements.length+
 													"\nInitial region size: " + region.length +
