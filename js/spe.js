@@ -39,6 +39,7 @@ var SPE = (function () {
 		// measurements array
 		this.measurements = [];
 		// clustering engine - DBSCAN
+		this.dbscan_worker = undefined;
 		this.eps = 0;
 		this.min_region_size = 5;
 		this.selected_cluster_measurment_indices = [];
@@ -148,7 +149,6 @@ var SPE = (function () {
 		d3.text("data/" + self.filelist, function(dirlist){
 			// check text from list for valid files
 			d3.dsvFormat(".").parseRows(dirlist, function(row, i){
-				console.log(row)
 				self.file_count++;
 				var format = row[row.length-1].toLowerCase();
 				switch(format){
@@ -557,18 +557,8 @@ var SPE = (function () {
 		this.generateLoaderMessage("DBSCAN\nEpsilon: "+this.eps+"\nMinimal Region Size: "+this.min_region_size);
 		var self = this;
 		setTimeout(function(){
-			self.dbscan();
-			var avgSize = 0;
-			for(var c=0; c < self.clusters.length; c++){
-				avgSize += self.clusters[c].size;
-			}
-			avgSize = avgSize / self.clusters.length;
-			// report clustering
-			console.log(self.measurements[0].fv_type + " has EPS["+self.eps+"] and "+ self.clusters.length + "clusters with AVG size " + avgSize);
-			self.hideLoading(true);
-			self.hideMenu(false);
-			self.hideMenuItem("menu-overview", false);
-			self.plotRepresentativeMatrix();
+			self.rundWorkerForDBSCAN();
+			//self.dbscan();
 		}, 1);
 	}
 
@@ -608,6 +598,30 @@ var SPE = (function () {
 	}
 	
 	// ---
+	// Description: DBSCAN cluster expansion
+	// ---
+	SPE.prototype.expandCluster = function(cluster, region){
+		var found_new_regions = [];
+		for(var i=0; i < region.length; i++){
+			var index = region[i];
+			if(!this.measurements[index].dbscan_visited){
+				this.measurements[index].dbscan_visited = true;
+				var new_region = this.regionQuery(index);
+				if(new_region.length >= this.min_region_size){
+					found_new_regions.push(new_region);
+				}
+			}
+			if(this.measurements[index].dbscan_cluster < 0){
+				cluster.addMember(index);
+				this.measurements[index].dbscan_cluster = cluster.id;
+			}
+		}
+		for(var i=0; i< found_new_regions.length; i++){
+			this.expandCluster(cluster, found_new_regions[i]);
+		}
+	}
+
+	// ---
 	// Description: DBSCAN distance function
 	// ---
 	SPE.prototype.dbscan = function(){
@@ -640,6 +654,14 @@ var SPE = (function () {
 				}
 			}
 		}
+		this.postDBSCAN();
+	}
+
+
+	// ---
+	// Description: DBSCAN distance function
+	// ---
+	SPE.prototype.postDBSCAN = function(){
 		this.prepareCenterCluster();
 		console.log("Noise marked count = " + this.marked_as_noise.length);
 		// doublecheck noise points
@@ -650,30 +672,74 @@ var SPE = (function () {
 			}
 		}
 		console.log("Actual marked count = " + this.marked_as_noise.length + "["+ (this.marked_as_noise.length*100/this.measurement_count)+"%]");
+
+		var avgSize = 0;
+		for(var c=0; c < this.clusters.length; c++){
+			avgSize += this.clusters[c].size;
+		}
+		avgSize = avgSize / this.clusters.length;
+		// report clustering
+		console.log(this.measurements[0].fv_type + " has EPS["+this.eps+"] and "+ this.clusters.length + "clusters with AVG size " + avgSize);
+		this.hideLoading(true);
+		this.hideMenu(false);
+		this.hideMenuItem("menu-overview", false);
+		this.plotRepresentativeMatrix();
 	}
 
 	// ---
-	// Description: DBSCAN cluster expansion
+	// Description: DBSCAN worker execution
 	// ---
-	SPE.prototype.expandCluster = function(cluster, region){
-		var found_new_regions = [];
-		for(var i=0; i < region.length; i++){
-			var index = region[i];
-			if(!this.measurements[index].dbscan_visited){
-				this.measurements[index].dbscan_visited = true;
-				var new_region = this.regionQuery(index);
-				if(new_region.length >= this.min_region_size){
-					found_new_regions.push(new_region);
-				}
-			}
-			if(this.measurements[index].dbscan_cluster < 0){
-				cluster.addMember(index);
-				this.measurements[index].dbscan_cluster = cluster.id;
-			}
-		}
-		for(var i=0; i< found_new_regions.length; i++){
-			this.expandCluster(cluster, found_new_regions[i]);
-		}
+	SPE.prototype.rundWorkerForDBSCAN = function(){
+		this.clusters = [];
+		this.cluster_of_clusters = null;
+		this.marked_as_noise = [];
+		var self = this;
+		this.dbscan_worker = new Worker('js/spe-dbscan-worker.js');
+		//setup reciever
+		this.dbscan_worker.addEventListener('message', function(e) {
+			var data = e.data;
+			switch (data.cmd) {
+				case 'console':
+					console.log(data.console);
+					break;
+				case 'msg':
+					self.generateLoaderMessage(data.msg);
+					break;
+				case 'test':
+					console.log(data.test);
+					// send inputs
+					self.dbscan_worker.postMessage({'cmd': "inputs", 'msg': {'eps' : self.eps, 'min_region_size' : self.min_region_size, 'm' : JSON.stringify(self.measurements)}});
+					break;
+				case 'inputs':
+					console.log(data.inputs);
+					// start dbscan
+					self.dbscan_worker.postMessage({'cmd': "start"});
+					break;
+				case 'noise':
+					self.marked_as_noise = data.noise;
+					//console.log(this.marked_as_noise);
+					// noise is last element to recieve - shutdown worker
+					self.dbscan_worker.postMessage({'cmd': "stop"});
+					self.dbscan_worker.terminate();
+	    			self.dbscan_worker = undefined;
+	    			// continue work
+	    			self.postDBSCAN();
+					break;
+				case 'cluster':
+					var cluster = new Cluster(0);
+					cluster.fromJSON(data.cluster);
+					for(var m=0; m < cluster.size; m++){
+						self.measurements[cluster.getMember(m)].dbscan_cluster = cluster.id;
+					}
+					self.clusters.push(cluster);
+					break;
+				default:
+					console.log('Unknown command: ' + data.cmd);
+			};
+		}, false);
+
+		// check if working
+		this.dbscan_worker.postMessage({'cmd': "test", 'msg': "Are you working?"});
 	}
 
 	// ---
@@ -913,16 +979,6 @@ var SPE = (function () {
 		self.sort(self, type, self.selected_sorting, cluster);
 		// unhide form
 		self.hideForm(false);
-
-		// restart clustering button - now link in menu
-					/*
-			d3.select("#form").append("button").text("RESTART").on("click", function(){
-				d3.select("#form").selectAll("button").remove();
-				d3.select("#form").selectAll("select").remove();
-				self.selectDataGUI();
-			});*/
-			// sorting gui
-
 	}
 
 	// ---
@@ -1298,6 +1354,30 @@ var Cluster = (function () {
 	// ---
 	Cluster.prototype.toString = function () {
 		return "Cluster " + this.id + " has " + this.size + " measurements";
+	}
+
+	// ---
+	// Description: Generate JSON for worker data transfer
+	// ---
+	Cluster.prototype.toJSON = function () {
+		return {
+			"id": this.id,
+			"members": this.member_indicies,
+			"center": this.center_index,
+			"far": this.farthest_from_center_index,
+			"farfar": this.farthest_from_farthest_index,
+		};
+	}
+	// ---
+	// Description: Fill properties from JSON for worker data transfer
+	// ---
+	Cluster.prototype.fromJSON = function (jsonValues) {
+		this.id = jsonValues.id;
+		this.member_indicies = jsonValues.members;
+		this.size = this.member_indicies.length;
+		this.center_index = jsonValues.center;
+		this.farthest_from_center_index = jsonValues.far;
+		this.farthest_from_farthest_index = jsonValues.farfar;
 	}
 
 	return Cluster;

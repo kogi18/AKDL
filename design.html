@@ -64,8 +64,14 @@
 					testC[m].findCenterMember(distF);
 					testC[m].findFarthestMember(distF);
 				}
+
+				//console.log(JSON.stringify(spe.measurements))
 				spe.generateLoaderMessage("This is a test for the animation\n It should look quite nice!\n" + spe.loadString());
-/*				spe.clusters = testC;
+
+				//spe.rundWorkerForDBSCAN();
+
+
+			spe.clusters = testC;
 				spe.prepareCenterCluster();
 				//spe.selectDataGUI();
 				spe.plotRepresentativeMatrix();
@@ -77,7 +83,7 @@
 					spe.hideForm(false);
 					spe.hideCanvas(false);
 				},1);
-*/
+
 			}
 		</script>
 	</head>
