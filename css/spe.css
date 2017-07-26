@@ -147,6 +147,37 @@ nav svg #logo-magnifying-glass path,
 	fill: #E8EDE0;
 }
 
+#canvas svg.last-selected rect{
+	fill: red;
+}
+
+#canvas svg.inline g.measurement-group.last-selected circle{
+	fill: #FCD271;
+}
+
+#canvas svg.center rect{
+	fill: green;
+}
+
+#canvas svg.inline g.measurement-group.far circle{
+	fill: green;
+}
+
+#canvas svg.far rect{
+	fill: black;
+}
+
+#canvas svg.inline g.measurement-group.farfar circle{
+	fill: black;
+}
+
+#canvas svg.farfar rect{
+	fill: pink;
+}
+
+#canvas svg.inline g.measurement-group.farfar circle{
+	fill: pink;
+}
 
 /* form element positioning*/
 #form{

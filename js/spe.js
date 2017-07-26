@@ -45,16 +45,19 @@ var SPE = (function () {
 		this.dbscan_worker = undefined;
 		this.eps = 0;
 		this.min_region_size = 5;
-		this.selected_cluster_measurment_indices = [];
+		this.selected_cluster_measurement_indices = [];
 		self.selected_cluster_index = -1;
 		this.clusters = [];
 		this.cluster_of_clusters = null;
 		this.marked_as_noise = [];
 		this.selected_sorting = "fromcenter";
 		this.selected_cluster_rendering = "matrix";
-		this.selected_cluster_filter = "meta";
+		this.selected_cluster_filtering = "cluster";
 		this.selected_cluster_filter_type = -1;
 		this.selected_cluster_filter_value = undefined;
+		this.selected_measurement = undefined;
+		this.user_position = 0;
+		this.user_backwards_direction = false;
 		// useful constants
 		this.string_line_seperator = "\n" + Array(40).join("-") + "\n";
 		this.matrix_sp_min_width = 300;
@@ -405,11 +408,21 @@ var SPE = (function () {
 	}
 
 	// ---
+	// Description: Record user movement and direction
+	//				Positions: Filter and left: 0, Cluster of clusters: 1, Cluster: 2, Scatter Plot: 3
+	// ---
+	SPE.prototype.userMoveTo = function(newPosition){
+		this.user_backwards_direction = (newPosition - this.user_position) <= 0;
+		this.user_position = newPosition;
+	}
+
+	// ---
 	// Description: Bind navigation menu functions
 	// ---
 	SPE.prototype.generateMenuFunctions = function(){
 		var self = this;
 		d3.select("#menu-data-select").on("click", function(){
+			self.userMoveTo(0);
 			self.measurements = [];
 			self.clusters = [];
 			self.hideMenuItem("menu-overview",true);
@@ -419,36 +432,75 @@ var SPE = (function () {
 			self.selectDataGUI();
 		});
 		d3.select("#menu-matrix-overview").on("click", function(){
-			self.selected_cluster_measurment_indices = [];
+			self.userMoveTo(1);
+			self.selected_cluster_measurement_indices = [];
 			self.hideMenuItem("menu-cluster",true);
 			self.hideMenuItem("menu-sp",true);
 			self.clearGeneratedElements();
 			self.selected_cluster_rendering = "matrix";
+			self.selected_measurement = undefined;
 			self.plotRepresentatives();
 
 		});
 		d3.select("#menu-inline-overview").on("click", function(){
-			self.selected_cluster_measurment_indices = [];
+			self.userMoveTo(1);
+			self.selected_cluster_measurement_indices = [];
 			self.hideMenuItem("menu-cluster",true);
 			self.hideMenuItem("menu-sp",true);
 			self.clearGeneratedElements();
 			self.selected_cluster_rendering = "inline";
+			self.selected_measurement = undefined;
 			self.plotRepresentatives();
 		});
 		d3.select("#menu-matrix-cluster").on("click", function(){
+			self.userMoveTo(2);
 			self.hideMenuItem("menu-sp",true);
 			self.clearGeneratedElements();
 			self.selected_cluster_rendering = "matrix";
 			self.plotClusterMeasurements(self.cluster_of_clusters.getMember(self.selected_cluster_index));
 		});
 		d3.select("#menu-inline-cluster").on("click", function(){
+			self.userMoveTo(2);
 			self.hideMenuItem("menu-sp",true);
 			self.clearGeneratedElements();
 			self.selected_cluster_rendering = "inline";
 			self.plotClusterMeasurements(self.cluster_of_clusters.getMember(self.selected_cluster_index));
 		});
+		d3.select("#menu-cluster-filter").on("click", function(){
+			self.userMoveTo(0);
+			self.selected_cluster_rendering = "matrix";
+			self.selected_cluster_filtering = "cluster";
+			self.selected_cluster_filter_type = -1;
+			self.selected_cluster_filter_value = undefined;
+			self.selected_measurement = undefined;
+			self.selected_cluster_index = -1;
+			self.hideMenuItem("menu-overview",true);
+			self.hideMenuItem("menu-cluster",true);
+			self.hideMenuItem("menu-sp",true);
+			self.clearGeneratedElements();
+			self.plotRepresentatives();
+		});
+		d3.select("#menu-metadata-filter").on("click", function(){
+			self.userMoveTo(0);
+			self.selected_cluster_rendering = "inline";
+			self.selected_cluster_filtering = "meta";
+			self.selected_cluster_filter_type = -1;
+			self.selected_cluster_filter_value = undefined;
+			self.selected_measurement = undefined;
+			self.selected_cluster_index = -1;
+			self.hideMenuItem("menu-overview",true);
+			self.hideMenuItem("menu-cluster",true);
+			self.hideMenuItem("menu-sp",true);
+			self.clearGeneratedElements();
+			self.plotRepresentatives();
+		});
+		d3.select("#menu-info").on("click", function(){
+			self.clearGeneratedElements();
+			d3.select("#form").selectAll("div").data(self.selected_measurement.toString().split("\n"))
+				.enter().append("div").text(function(d){return d;})
+			self.hideForm(false);
+		});
 
-		console.log("TO DO FUNC: " + "menu-cluster-filter" + "menu-metadata-filter" + "menu-info");
 	}
 
 	// ---
@@ -711,6 +763,7 @@ var SPE = (function () {
 		this.hideLoading(true);
 		this.hideMenu(false);
 		this.hideMenuItem("menu-overview", false);
+		this.userMoveTo(1); // Cluster of clusters: 1
 		this.plotRepresentatives();
 	}
 
@@ -874,7 +927,7 @@ var SPE = (function () {
 			}
 		}
 		else if(type == "measurement"){
-			self.selected_cluster_measurment_indices.sort(sorterFunc);
+			self.selected_cluster_measurement_indices.sort(sorterFunc);
 		}
 		else{
 			throw "Unknown type: " + type;
@@ -1041,7 +1094,7 @@ var SPE = (function () {
 			d3.select("#plot-element-select").on("change", function(){
 				onChangeFun(d3.select("#plot-element-select").node().value);
 			});
-			switch(self.selected_cluster_filter){
+			switch(this.selected_cluster_filtering){
 				case "cluster":
 					d3.select("#form").append("div").classed("button",true)
 						.append("button").text("INSPECT").on("click", function(){
@@ -1063,7 +1116,7 @@ var SPE = (function () {
 					}
 					break;
 				default:
-					throw "Unknown cluster selection type " + self.selected_cluster_filter;
+					throw "Unknown cluster selection type " + this.selected_cluster_filtering;
 			};
 			self.hideForm(false);
 		}
@@ -1073,11 +1126,24 @@ var SPE = (function () {
 	// Description: Using the measurement generates scatter plot points
 	// ---
 	SPE.prototype.generateClusterGroupForSVG = function(svg, measurement, transparency, scaleX, scaleY, msgObject, onClickFun){
+		var self = this;
 		var clusterGroup = svg.selectAll("svg > g");
 		clusterGroup = clusterGroup.data(clusterGroup.data().concat([measurement]))
 			.enter().append("g")
 				.classed("measurement-group", true)
-				.attr("id", function(m) {return m.doi;});
+				.classed("last-selected", function(m){
+					return self.user_backwards_direction && ((self.selected_measurement && self.selected_measurement.doi == m.doi) ||
+					(self.selected_cluster_index >= 0 && self.cluster_of_clusters.getMember(self.selected_cluster_index).id == m.dbscan_cluster));
+				}).classed("center", function(m){
+					return (self.user_position <= 1  && self.measurements[self.cluster_of_clusters.center_index.center_index].doi == measurement.doi) ||
+					(self.user_position == 2 && self.selected_cluster_index >= 0 && self.measurements[self.cluster_of_clusters.getMember(self.selected_cluster_index).center_index].doi == measurement.doi);
+				}).classed("far", function(m){
+					return (self.user_position <= 1  && self.measurements[self.cluster_of_clusters.farthest_from_center_index.center_index].doi == measurement.doi) ||
+					(self.user_position == 2 && self.selected_cluster_index >= 0 && self.measurements[self.cluster_of_clusters.getMember(self.selected_cluster_index).farthest_from_center_index].doi == measurement.doi);
+				}).classed("farfar", function(m){
+					return (self.user_position <= 1  && self.measurements[self.cluster_of_clusters.farthest_from_farthest_index.center_index].doi == measurement.doi) ||
+					(self.user_position == 2 && self.selected_cluster_index >= 0 && self.measurements[self.cluster_of_clusters.getMember(self.selected_cluster_index).farthest_from_farthest_index].doi == measurement.doi);
+				}).attr("id", function(m) {return m.doi;});
 		var pointGroup = clusterGroup.selectAll("g > g").data(function(m) {return m.pairs;})
 			.enter().append("g")
 			.attr("class", "pointGroup").attr("id", function(d,i){
@@ -1085,7 +1151,12 @@ var SPE = (function () {
 		});
 		// append title for msg object to be shown
 		if(this.checkFunctionType(msgObject)){
-			clusterGroup.append("title").text(msgObject(measurement));
+			if((this.selected_measurement && this.selected_measurement.doi == measurement.doi) ||
+				(this.selected_cluster_index >= 0 && this.cluster_of_clusters.getMember(this.selected_cluster_index).id == measurement.dbscan_cluster)){
+				clusterGroup.append("title").text("Last selected\n" + msgObject(measurement));
+			}else{
+				clusterGroup.append("title").text(msgObject(measurement));
+			}
 		}
 		else if(msgObject){
 			clusterGroup.append("title").text("" + msgObject);
@@ -1176,7 +1247,15 @@ var SPE = (function () {
 	SPE.prototype.plotScatterPlot = function(selector, measurement, width, height, showDetails, msgObject, onClickFun){
 		var sp = this.plotScatterPlotInline(selector, [measurement], width, height);
 		sp.svg.selectAll("rect").append("title").text("" + msgObject);
-		sp.svg.classed("inline",false);
+		sp.svg.classed("inline",false)
+			.classed("last-selected", this.user_backwards_direction && ((this.selected_measurement && this.selected_measurement.doi == measurement.doi) ||
+					(this.selected_cluster_index >= 0 && this.cluster_of_clusters.getMember(this.selected_cluster_index).id == measurement.dbscan_cluster)))
+			.classed("center", (this.user_position <= 1  && this.measurements[this.cluster_of_clusters.center_index.center_index].doi == measurement.doi) ||
+								(this.user_position == 2 && this.selected_cluster_index >= 0 && this.measurements[this.cluster_of_clusters.getMember(this.selected_cluster_index).center_index].doi == measurement.doi))
+			.classed("far", (this.user_position <= 1  && this.measurements[this.cluster_of_clusters.farthest_from_center_index.center_index].doi == measurement.doi) ||
+								(this.user_position == 2 && this.selected_cluster_index >= 0 && this.measurements[this.cluster_of_clusters.getMember(this.selected_cluster_index).farthest_from_center_index].doi == measurement.doi))
+			.classed("farfar", (this.user_position <= 1  && this.measurements[this.cluster_of_clusters.farthest_from_farthest_index.center_index].doi == measurement.doi) ||
+								(this.user_position == 2 && this.selected_cluster_index >= 0 && this.measurements[this.cluster_of_clusters.getMember(this.selected_cluster_index).farthest_from_farthest_index].doi == measurement.doi));
 		if(showDetails){
 			// set the scale functons to map the points to given canvas
 			var scaleX = d3.scaleLinear().domain([measurement.minX, measurement.maxX]).range(sp.ranges[0]);
@@ -1358,24 +1437,25 @@ var SPE = (function () {
 					break;
 				}
 			}
+			self.userMoveTo(2)	//Cluster: 2
 			self.plotClusterMeasurements(self.cluster_of_clusters.getMember(self.selected_cluster_index));
 		};
 
 		// select correct gui
 		switch(this.selected_cluster_rendering){
 			case "matrix":
+				// enable form for inside cluster sort_indices - sorts also automatically
+				this.selectSortGUI("cluster");
 				// prepare representatives
 				for(var c=0; c<this.clusters.length; c++){
 					var canAdd = true;
-					if(this.selected_cluster_filter == "meta" && this.selected_cluster_filter_type >= 0  && this.selected_cluster_filter_value){
+					if(this.selected_cluster_filtering == "meta" && this.selected_cluster_filter_type >= 0  && this.selected_cluster_filter_value){
 						canAdd = this.clusters[c].unique_metas[this.selected_cluster_filter_type].has(this.selected_cluster_filter_value);
 					}
 					if(canAdd){
 						represantatives.push(this.clusters[c].center_index);	
 					}
 				}
-				// enable form for inside cluster sort_indices - sorts also automatically
-				this.selectSortGUI("cluster");	
 				break;
 			case "inline":
 				var sortFun, onChangeFun, onSubmitFun;
@@ -1383,7 +1463,7 @@ var SPE = (function () {
 				for(var c=0; c<this.clusters.length; c++){
 					represantatives.push(this.measurements[this.clusters[c].center_index]);
 				}
-				switch(this.selected_cluster_filter){
+				switch(this.selected_cluster_filtering){
 					case "cluster":
 						// prepare representatives for gui
 						for(var c=0; c<this.clusters.length; c++){
@@ -1442,15 +1522,15 @@ var SPE = (function () {
 			var farthestfarthest = self.measurements[self.cluster_of_clusters.farthest_from_farthest_index.center_index];
 			var m_type = ""; // just 1 of many
 			if(center.doi == m.doi){
-				m_type += "Center Cluster ";	//center index
+				m_type += "Center Cluster\n";	//center index
 			}
 			if(farthest.doi == m.doi){
-				m_type += "Farthest From Center Cluster ";	//Farthest index
+				m_type += "Farthest From Center Cluster\n";	//Farthest index
 			}
 			if(farthestfarthest.doi == m.doi){
-				m_type += "Farthest From Farthest Cluster ";	//Farthest index
+				m_type += "Farthest From Farthest Cluster\n";	//Farthest index
 			}
-			return m_type + "\n" + self.cluster_of_clusters.getMember(m.dbscan_cluster);
+			return m_type + self.cluster_of_clusters.getMember(m.dbscan_cluster);
 		};
 
 		// start plotting
@@ -1476,7 +1556,7 @@ var SPE = (function () {
 					clusterInfoFun,
 					clusterPlotFun
 				);
-				if(this.selected_cluster_filter == "meta" && this.selected_cluster_filter_type >= 0  && this.selected_cluster_filter_value){
+				if(this.selected_cluster_filtering == "meta" && this.selected_cluster_filter_type >= 0  && this.selected_cluster_filter_value){
 					onSubmitFun(this.selected_cluster_filter_value);
 				}
 				break;
@@ -1489,9 +1569,9 @@ var SPE = (function () {
 	// Description: use given cluster to plot a matrix or inline scatter plots of cluster 
 	// ---
 	SPE.prototype.plotClusterMeasurements = function(cluster){
-		this.selected_cluster_measurment_indices = [];
+		this.selected_cluster_measurement_indices = [];
 		for(var m=0; m<cluster.size; m++){
-			this.selected_cluster_measurment_indices.push(cluster.getMember(m));
+			this.selected_cluster_measurement_indices.push(cluster.getMember(m));
 		}
 
 		// consistent values
@@ -1505,22 +1585,24 @@ var SPE = (function () {
 			var farthestfarthest = self.measurements[cluster.farthest_from_farthest_index];
 			var m_type = ""; // just 1 of many
 			if(center.doi == m.doi){
-				m_type += "Center Measurement ";	//center index
+				m_type += "Center Measurement\n";	//center index
 			}
 			if(farthest.doi == m.doi){
-				m_type += "Farthest From Center Measurement ";	//Farthest index
+				m_type += "Farthest From Center Measurement\n";	//Farthest index
 			}
 			if(farthestfarthest.doi == m.doi){
-				m_type += "Farthest From Farthest Measurement ";	//Farthest index
+				m_type += "Farthest From Farthest Measurement\n";	//Farthest index
 			}
-			return m_type + "\n" + m;
+			return m_type + m;
 		};
 		var clusterPlotFun = function(m){
+			self.selected_measurement = m;
 			self.clearGeneratedElements();
 			self.hideCanvas(false);
 			self.hideMenuItem("menu-sp",false);
 			// correct canvas size
 			d3.select("#canvas").style("height", "100%");
+			self.userMoveTo(3)	//Scatter Plot: 3
 			// +13 because we hide scrollbar
 			self.plotScatterPlot(d3.select("#canvas"), m, canvasDim[0] + 13, canvasDim[1], true, m, null);
 		};
@@ -1528,11 +1610,11 @@ var SPE = (function () {
 		// start plotting
 		switch(this.selected_cluster_rendering){
 			case "matrix":
-				if(this.selected_cluster_filter == "meta" && this.selected_cluster_filter_type >= 0  && this.selected_cluster_filter_value){
-					this.selected_cluster_measurment_indices = [];
+				if(this.selected_cluster_filtering == "meta" && this.selected_cluster_filter_type >= 0  && this.selected_cluster_filter_value){
+					this.selected_cluster_measurement_indices = [];
 					for(var m=0; m<cluster.size; m++){
 						if(cluster.unique_metas[this.selected_cluster_filter_type].has(this.selected_cluster_filter_value)){
-							this.selected_cluster_measurment_indices.push(cluster.getMember(m));
+							this.selected_cluster_measurement_indices.push(cluster.getMember(m));
 						}
 					}
 				}
@@ -1540,7 +1622,7 @@ var SPE = (function () {
 				this.selectSortGUI("measurement", cluster);
 				this.plotScatterPlotMatrix(
 					canvas,
-					this.selected_cluster_measurment_indices,
+					this.selected_cluster_measurement_indices,
 					canvasDim[0],
 					canvasHeight,
 					false,
@@ -1551,12 +1633,12 @@ var SPE = (function () {
 			case "inline":
 				// prepare representatives
 				var selected_cluster_measurments = [], m_GUI =[["No measurement selected", -1]];
-				for(var sm=0; sm<this.selected_cluster_measurment_indices.length; sm++){
-					m_GUI.push([this.measurements[this.selected_cluster_measurment_indices[sm]].doi, sm]);	//name value
-					selected_cluster_measurments.push(this.measurements[this.selected_cluster_measurment_indices[sm]]);
+				for(var sm=0; sm<this.selected_cluster_measurement_indices.length; sm++){
+					m_GUI.push([this.measurements[this.selected_cluster_measurement_indices[sm]].doi, sm]);	//name value
+					selected_cluster_measurments.push(this.measurements[this.selected_cluster_measurement_indices[sm]]);
 				}
 				var sortFun, onChangeFun, onSubmitFun;
-				switch(this.selected_cluster_filter){
+				switch(this.selected_cluster_filtering){
 					case "cluster":
 						onChangeFun = function(value){
 							// highlight measurement group
@@ -1603,7 +1685,7 @@ var SPE = (function () {
 					clusterInfoFun,
 					clusterPlotFun
 				);
-				if(this.selected_cluster_filter == "meta" && this.selected_cluster_filter_type >= 0  && this.selected_cluster_filter_value){
+				if(this.selected_cluster_filtering == "meta" && this.selected_cluster_filter_type >= 0  && this.selected_cluster_filter_value){
 					onSubmitFun(this.selected_cluster_filter_value);
 				}
 				break;
