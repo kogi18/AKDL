@@ -56,8 +56,13 @@ nav > ul > li:hover > ul{
 }
 
 nav > ul > li > ul li.menu-option{
-	padding: 5px;
+	padding: 0.25em 1em;
 	color: #F78D3F;
+}
+
+nav > ul > li > ul li.menu-option:hover{
+	color: #102E37;
+	background-color: #F78D3F; 
 }
 
 nav svg {
@@ -125,10 +130,18 @@ nav svg #logo-magnifying-glass path,
 	fill: #F78D3F;
 }
 
+
 #canvas svg.detail:not(.inline) circle:hover,
-#canvas svg.inline g.measurement-group:hover circle,
-#canvas svg.inline g.measurement-group.selected-group circle{
+#canvas svg.inline g:not(.chosen-group).measurement-group:hover circle{
 	fill: #2BBBD8;
+}
+
+#canvas svg.inline g.measurement-group.chosen-group circle{
+	fill: #81C6DD;
+}
+
+#canvas svg.detail:not(.inline) circle:hover,
+#canvas svg.inline g.measurement-group:hover circle{
 	fill-opacity: 1;
 }
 
@@ -159,17 +172,17 @@ nav svg #logo-magnifying-glass path,
 }
 
 #canvas:not(.color-coding-off) svg:not(:hover):not(.last-selected).center circle,
-#canvas:not(.color-coding-off) svg.inline g.measurement-group:not(.last-selected).center circle{
+#canvas:not(.color-coding-off) svg.inline g.measurement-group:not(.last-selected):not(.chosen-group).center circle{
 	fill: #90CA77;
 }
 
-#canvas:not(.color-coding-off) svg:not(:hover):not(.last-selected).far circle,
-#canvas:not(.color-coding-off) svg.inline g.measurement-group:not(.last-selected).far circle{
+#canvas:not(.color-coding-off) svg:not(:hover):not(.last-selected):not(.center).far circle,
+#canvas:not(.color-coding-off) svg.inline g.measurement-group:not(.last-selected):not(.chosen-group):not(.center).far circle{
 	fill: #102E37;
 }
 
-#canvas:not(.color-coding-off) svg:not(:hover):not(.last-selected).farfar circle,
-#canvas:not(.color-coding-off) svg.inline g.measurement-group:not(.last-selected).farfar circle{
+#canvas:not(.color-coding-off) svg:not(:hover):not(.last-selected):not(.center):not(.far).farfar circle,
+#canvas:not(.color-coding-off) svg.inline g.measurement-group:not(.last-selected):not(.chosen-group):not(.center):not(.far).farfar circle{
 	fill: #FFFFFF;
 }
 
@@ -224,7 +237,6 @@ nav svg #logo-magnifying-glass path,
 
 /*loading animation*/
 #loader{
-	height: 100vh;
 	background-color: #2BBBD8;
 	text-align: center;
 }

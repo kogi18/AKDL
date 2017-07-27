@@ -18,7 +18,7 @@ var SPE = (function () {
 		this.raw_files = [];
 		this.fv_files = [];
 		this.lists = [];
-		// indicies for selected files to be used in calculations
+		// indices for selected files to be used in calculations
 		this.selected_label = 0;
 		this.selected_raw = 0;
 		this.selected_fv = 0;
@@ -601,8 +601,6 @@ var SPE = (function () {
 		// Clean all SVGs
 		d3.select("#canvas").attr("style", null).selectAll("svg").remove();
 		this.hideCanvas(true);
-
-		console.log("TO DO function for clearing");
 	}
 
 
@@ -852,9 +850,9 @@ var SPE = (function () {
 		self.cluster_of_clusters = new Cluster("Cluster of Clusters");
 		// prepare cluster object
 		var metaLists = self.cluster_of_clusters.metaToArrays();
-		// this exception stores the actual clusters and not indicies
+		// this exception stores the actual clusters and not indices
 		for(var c=0; c<this.clusters.length; c++){
-			// before storing cluster set outer indicies - cluster one is permanent, sorted changes
+			// before storing cluster set outer indices - cluster one is permanent, sorted changes
 			self.clusters[c].setOuterIndecies(c);
 			self.cluster_of_clusters.addMember(self.clusters[c]);
 			var currentMeta = self.clusters[c].metaToArrays();
@@ -868,10 +866,11 @@ var SPE = (function () {
 		self.cluster_of_clusters.findCenterMember(clusterDistFunc);
 		// find farthest cluster
 		self.cluster_of_clusters.findFarthestMember(clusterDistFunc);
-
+		/*
 		console.log("Center " + self.measurements[self.cluster_of_clusters.center_index.center_index].doi,
 					"Farthest " + self.measurements[self.cluster_of_clusters.farthest_from_center_index.center_index].doi,
 					"Outlier " + self.measurements[self.cluster_of_clusters.farthest_from_farthest_index.center_index].doi);
+		*/
 	}
 
 	// ---
@@ -1113,7 +1112,7 @@ var SPE = (function () {
 			switch(this.selected_cluster_filtering){
 				case "cluster":
 					d3.select("#form").append("div").classed("button",true)
-						.append("button").text("INSPECT").on("click", function(){
+						.append("button").attr("disabled",true).text("INSPECT").on("click", function(){
 							onSubmitFun(d3.select("#plot-element-select").node().value);
 					});
 					break;
@@ -1152,14 +1151,14 @@ var SPE = (function () {
 							(self.user_position <= 1  && self.selected_cluster_index >= 0 && self.cluster_of_clusters.getMember(self.selected_cluster_index).id == m.dbscan_cluster)
 							|| (self.user_position == 2 && self.selected_measurement && self.selected_measurement.doi == m.doi));
 				}).classed("center", function(m){
-					return (self.user_position <= 1  && self.measurements[self.cluster_of_clusters.center_index.center_index].doi == measurement.doi) ||
-					(self.user_position == 2 && self.selected_cluster_index >= 0 && self.measurements[self.cluster_of_clusters.getMember(self.selected_cluster_index).center_index].doi == measurement.doi);
+					return (self.user_position <= 1  && self.measurements[self.cluster_of_clusters.center_index.center_index].doi == m.doi) ||
+					(self.user_position == 2 && self.selected_cluster_index >= 0 && self.measurements[self.cluster_of_clusters.getMember(self.selected_cluster_index).center_index].doi == m.doi);
 				}).classed("far", function(m){
-					return (self.user_position <= 1  && self.measurements[self.cluster_of_clusters.farthest_from_center_index.center_index].doi == measurement.doi) ||
-					(self.user_position == 2 && self.selected_cluster_index >= 0 && self.measurements[self.cluster_of_clusters.getMember(self.selected_cluster_index).farthest_from_center_index].doi == measurement.doi);
+					return (self.user_position <= 1  && self.measurements[self.cluster_of_clusters.farthest_from_center_index.center_index].doi == m.doi) ||
+					(self.user_position == 2 && self.selected_cluster_index >= 0 && self.measurements[self.cluster_of_clusters.getMember(self.selected_cluster_index).farthest_from_center_index].doi == m.doi);
 				}).classed("farfar", function(m){
-					return (self.user_position <= 1  && self.measurements[self.cluster_of_clusters.farthest_from_farthest_index.center_index].doi == measurement.doi) ||
-					(self.user_position == 2 && self.selected_cluster_index >= 0 && self.measurements[self.cluster_of_clusters.getMember(self.selected_cluster_index).farthest_from_farthest_index].doi == measurement.doi);
+					return (self.user_position <= 1  && self.measurements[self.cluster_of_clusters.farthest_from_farthest_index.center_index].doi == m.doi) ||
+					(self.user_position == 2 && self.selected_cluster_index >= 0 && self.measurements[self.cluster_of_clusters.getMember(self.selected_cluster_index).farthest_from_farthest_index].doi == m.doi);
 				}).attr("id", function(m) {return m.doi;});
 		var pointGroup = clusterGroup.selectAll("g > g").data(function(m) {return m.pairs;})
 			.enter().append("g")
@@ -1214,6 +1213,10 @@ var SPE = (function () {
 	// Description: Using the measurements plots the inline scatter plot as selector child
 	// ---
 	SPE.prototype.plotScatterPlotInline = function(selector, measurements, width, height, appendAxis, msgObject, onClickFun){
+		// cancel lodaing
+		this.hideCanvas(false);
+		this.hideMenu(false);
+		this.hideLoading(true);
 		var transparency = 1.0;
 		var padding_per = this.sp_padding_normal_per;
 		// when inline == many measurements
@@ -1450,21 +1453,35 @@ var SPE = (function () {
 	// Description: use cluster of clusters centers to plot a matrix or inline scatter plots of represantatives
 	// ---
 	SPE.prototype.plotRepresentatives = function(){
+		// clear all elements
+		this.clearGeneratedElements();
+		// show only loading before plot finished
+		this.generateLoaderMessage("Preparing plots");
+		this.hideMenu(true);
+		this.hideLoading(false);
 		var represantatives = [], represantatives_GUI = [["No cluster selected", -1]];
 		var self = this;
 		// helper function
 		var clusterPlotFun = function(m){
-			self.clearGeneratedElements();
-			self.hideMenu(true);
-			self.hideLoading(false);
-			for(var c=0; c < self.cluster_of_clusters.size; c++){
-				if(self.cluster_of_clusters.getMember(c).id == m.dbscan_cluster){	//ID not always index number
-					self.selected_cluster_index = c;
-					break;
+				self.clearGeneratedElements();
+				self.hideMenu(true);
+				self.hideLoading(false);
+			setTimeout(function(){
+				self.selected_cluster_index = -1;
+				for(var c=0; c < self.cluster_of_clusters.size; c++){
+					if(self.cluster_of_clusters.getMember(c).id == m.dbscan_cluster){	//ID not always index number
+						self.selected_cluster_index = c;
+						break;
+					}
 				}
-			}
-			self.userMoveTo(2)	//Cluster: 2
-			self.plotClusterMeasurements(self.cluster_of_clusters.getMember(self.selected_cluster_index));
+				if(self.selected_cluster_index >=0){
+					self.userMoveTo(2)	//Cluster: 2
+					self.plotClusterMeasurements(self.cluster_of_clusters.getMember(self.selected_cluster_index));	
+				}
+				else{
+					throw "No right cluster id in " + m;
+				}
+			}, 1);
 		};
 
 		// select correct gui
@@ -1496,12 +1513,19 @@ var SPE = (function () {
 							represantatives_GUI.push([this.clusters[c].id, c]);	//name value
 						}
 						onChangeFun = function(value){
-							// highlight measurement group
-							var center_doi = self.measurements[self.clusters[value].center_index].doi;
-							// inline means only 1 svg in canvas
-							d3.select("#canvas").selectAll("svg > g").classed("selected-group", function(m){
-								return m.doi == center_doi;
-						})};
+							if(value < 0){
+								d3.select("#canvas").selectAll("svg > g").classed("chosen-group",false);
+								d3.select("#form").selectAll("button").attr("disabled",true);
+							}
+							else{
+								d3.select("#form").selectAll("button").attr("disabled",null);
+								var center_doi = self.measurements[self.clusters[value].center_index].doi;
+								// inline means only 1 svg in canvas
+								d3.select("#canvas").selectAll("svg > g").classed("chosen-group", function(m){
+									return m.doi == center_doi;
+								})
+							}
+						};
 						onSubmitFun = function(value){
 							// open cluster as new plot
 							clusterPlotFun(self.measurements[self.clusters[value].center_index]);
@@ -1533,10 +1557,6 @@ var SPE = (function () {
 			default:
 				throw "Unknown " + this.selected_cluster_rendering + " rendering of clusters";
 		}
-		// show only loading before plot finished	
-		this.hideCanvas(false);
-		this.hideMenu(false);
-		this.hideLoading(true);
 
 		// consistent values
 		var canvas = d3.select("#canvas");
@@ -1595,6 +1615,12 @@ var SPE = (function () {
 	// Description: use given cluster to plot a matrix or inline scatter plots of cluster 
 	// ---
 	SPE.prototype.plotClusterMeasurements = function(cluster){
+		// clear all elements
+		this.clearGeneratedElements();
+		// show only loading before plot finished	
+		this.generateLoaderMessage("Preparing plots");
+		this.hideMenu(true);
+		this.hideLoading(false);
 		this.selected_cluster_measurement_indices = [];
 		for(var m=0; m<cluster.size; m++){
 			this.selected_cluster_measurement_indices.push(cluster.getMember(m));
@@ -1667,12 +1693,19 @@ var SPE = (function () {
 				switch(this.selected_cluster_filtering){
 					case "cluster":
 						onChangeFun = function(value){
-							// highlight measurement group
-							var center_doi = self.measurements[self.clusters[value].center_index].doi;
-							// inline means only 1 svg in canvas
-							d3.select("#canvas").selectAll("svg > g").classed("selected-group", function(m){
-								return m.doi == center_doi;
-							});
+							if(value < 0){
+								d3.select("#canvas").selectAll("svg > g").classed("chosen-group",false);
+								d3.select("#form").selectAll("button").attr("disabled",true);
+							}
+							else{
+								d3.select("#form").selectAll("button").attr("disabled",null);
+								// highlight measurement group
+								var center_doi = self.measurements[self.clusters[value].center_index].doi;
+								// inline means only 1 svg in canvas
+								d3.select("#canvas").selectAll("svg > g").classed("chosen-group", function(m){
+									return m.doi == center_doi;
+								})
+							}
 						}
 						onSubmitFun =  function(value){
 							// open cluster as new plot
@@ -1807,15 +1840,14 @@ var Cluster = (function () {
 	// Description: Constructor.
 	// ---
 	function Cluster(id) {
-		this.id = id;
-		this.member_indicies = [];
+		this.id = "Cluster " + id;
+		this.member_indices = [];
 		this.size = 0;
 		this.center_index = -1;
 		this.farthest_from_center_index = -1;
 		this.farthest_from_farthest_index = -1;
 		this.outer_sorted_index = -1;
 		this.outer_cluster_index = -1;
-
 		// unique meta
 		// ignore GPS for now
 		// meta_order = ["ID", "X-Axis", "Y-Axis", "XY-Axis", "Timestamp", "DOI"];
@@ -1829,7 +1861,7 @@ var Cluster = (function () {
 	// Description: Add Measurement index to cluster.
 	// ---
 	Cluster.prototype.addMember = function(index){
-		this.member_indicies.push(index);
+		this.member_indices.push(index);
 		this.size++;
 	}
 
@@ -1846,7 +1878,7 @@ var Cluster = (function () {
 	// Description: Get Measurement index from cluster.
 	// ---
 	Cluster.prototype.getMember = function(index){
-		return this.member_indicies[index];
+		return this.member_indices[index];
 	}
 
 	// ---
@@ -1859,7 +1891,7 @@ var Cluster = (function () {
 			var currentSum = 0;
 			for(var j=0; j<this.size; j++){
 				if(i != j){
-					currentSum += distanceFun(this.member_indicies[i], this.member_indicies[j]);
+					currentSum += distanceFun(this.member_indices[i], this.member_indices[j]);
 				}
 				// if currentSum is already bigger then minSum, candidate is not center
 				// break 2nd loop but be sure only when minSum is not initial value
@@ -1870,7 +1902,7 @@ var Cluster = (function () {
 			// after 2nd loop just compare if new min found
 			if(minSum < 0 || minSum > currentSum){
 				minSum = currentSum;
-				this.center_index = this.member_indicies[i];
+				this.center_index = this.member_indices[i];
 			}
 		}
 	}
@@ -1887,23 +1919,23 @@ var Cluster = (function () {
 			var currentSum = 0;
 			for(var j=0; j<this.size; j++){
 				if(i != j){
-					currentSum += distanceFun(this.member_indicies[i], this.member_indicies[j]);
+					currentSum += distanceFun(this.member_indices[i], this.member_indices[j]);
 				}
 			}
 			// after 2nd loop just compare if new min found
 			if(maxValue < currentSum){
 				maxValue = currentSum;
-				this.farthest_from_center_index = this.member_indicies[i];
+				this.farthest_from_center_index = this.member_indices[i];
 			}
 		}
 		maxValue = -1;
 		// loop once more to find farthest from foun outlier
 		for(var i=0; i<this.size; i++){
 			if(i != this.farthest_from_center_index){
-				var dist = distanceFun(this.member_indicies[i], this.farthest_from_center_index);
+				var dist = distanceFun(this.member_indices[i], this.farthest_from_center_index);
 				if(maxValue < dist){
 					maxValue = dist;
-					this.farthest_from_farthest_index = this.member_indicies[i];
+					this.farthest_from_farthest_index = this.member_indices[i];
 				}
 			}
 		}
@@ -1951,7 +1983,7 @@ var Cluster = (function () {
 	Cluster.prototype.toJSON = function () {
 		return {
 			"id": this.id,
-			"members": this.member_indicies,
+			"members": this.member_indices,
 			"center": this.center_index,
 			"far": this.farthest_from_center_index,
 			"farfar": this.farthest_from_farthest_index,
@@ -1963,8 +1995,8 @@ var Cluster = (function () {
 	// ---
 	Cluster.prototype.fromJSON = function (jsonValues) {
 		this.id = jsonValues.id;
-		this.member_indicies = jsonValues.members;
-		this.size = this.member_indicies.length;
+		this.member_indices = jsonValues.members;
+		this.size = this.member_indices.length;
 		this.center_index = jsonValues.center;
 		this.farthest_from_center_index = jsonValues.far;
 		this.farthest_from_farthest_index = jsonValues.farfar;
