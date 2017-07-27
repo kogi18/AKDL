@@ -34,7 +34,8 @@ Data / benchmark folder instructions
 	and which are of said formats, others will be ignored.
 
 	There can be multiple .list files but only the one specified in the HTML file body id will be used.
-	If filelist is not specified, the default value ALL.list will be used, which can be simply genrated with ls > ALL.list
+	If filelist is not specified, the default value ALL.list will be used, which can be simpl
+	generated with ls > ALL.list
 
 spe.js
 
@@ -45,24 +46,24 @@ spe.js
 
 	3 Objects build ESP:
 		ESP - the engine
-		Measurements - the holder of individual measurements build from combining *.data, *.csv and *.fv files.
-		Cluster - the lder of either measurement indices or clusters of indicies.
+		Measurements - holder of individual measurements build by combining *.data, *.csv and *.fv files.
+		Cluster - holder of either measurement indices or clusters of indicies.
 
 spe-dbscan-worker.js
 
-	a subset copy of spe.js functions to create a javascript worker to have animation/information during DBSCAN
+	Subset copy of spe.js functions to create a javascript worker for animation/information during DBSCAN.
 
 Clustering
 
-	Data is clustered by implementing DBSCAN algorithm with euclidian distances of same feature type vectors.
+	Data is clustering implements the DBSCAN algorithm with euclidian distances on feature type vectors.
 	The input parameters epsiolon and min search region size can be set in ESP object.
-	Beware that epsilon is a < type border and not <= and that minimum region includes the starting measurement.
+	Beware that epsilon is a < type border and not <= and minimum region includes the starting measurement.
 
 Sorting types
 
 	1.From Center
 
-		Center of cluster is the lowest value in array, while higher positions are defined using the distance from center.
+		Center of cluster is the lowest value in array, while others are positioned by the distance from center.
 		Center is found as the element with the minimum sum of all distances.
 	
 	2.From Farthest
