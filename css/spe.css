@@ -1,6 +1,11 @@
 body{
 	margin: 0;
 	padding: 0;
+	text-align: center;
+}
+
+body > *{
+	text-align: left;
 }
 
 .hidden{
@@ -139,6 +144,7 @@ nav svg #logo-magnifying-glass path,
 	fill: #E8EDE0;
 }
 
+#canvas svg.last-selected rect,
 #canvas svg:not(.detail):not(.inline):hover rect{
 	fill: #2BBBD8;
 }
@@ -147,36 +153,24 @@ nav svg #logo-magnifying-glass path,
 	fill: #E8EDE0;
 }
 
-#canvas svg.last-selected rect{
-	fill: red;
-}
-
+#canvas svg.last-selected g circle,
 #canvas svg.inline g.measurement-group.last-selected circle{
 	fill: #FCD271;
 }
 
-#canvas svg.center rect{
-	fill: green;
+#canvas:not(.color-coding-off) svg:not(:hover):not(.last-selected).center circle,
+#canvas:not(.color-coding-off) svg.inline g.measurement-group:not(.last-selected).center circle{
+	fill: #90CA77;
 }
 
-#canvas svg.inline g.measurement-group.far circle{
-	fill: green;
+#canvas:not(.color-coding-off) svg:not(:hover):not(.last-selected).far circle,
+#canvas:not(.color-coding-off) svg.inline g.measurement-group:not(.last-selected).far circle{
+	fill: #102E37;
 }
 
-#canvas svg.far rect{
-	fill: black;
-}
-
-#canvas svg.inline g.measurement-group.farfar circle{
-	fill: black;
-}
-
-#canvas svg.farfar rect{
-	fill: pink;
-}
-
-#canvas svg.inline g.measurement-group.farfar circle{
-	fill: pink;
+#canvas:not(.color-coding-off) svg:not(:hover):not(.last-selected).farfar circle,
+#canvas:not(.color-coding-off) svg.inline g.measurement-group:not(.last-selected).farfar circle{
+	fill: #FFFFFF;
 }
 
 /* form element positioning*/
@@ -192,6 +186,12 @@ nav svg #logo-magnifying-glass path,
 	width: 34%;
 	max-width: 250px;
 	text-align: left;
+}
+
+#form div.sp-info label{
+	max-width: 100%;
+	width: 60%;
+	text-align: center;
 }
 
 #form div label {

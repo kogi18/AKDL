@@ -79,7 +79,8 @@ var SPE = (function () {
 									"List",	[], "menu-list"
 								],[
 									"Generate",	[
-														["Measurements", "menu-data-select"]
+														["Measurements", "menu-data-select"],
+														["Color Coding", "menu-color-coding"]
 													],
 									"menu-restart"
 								],[
@@ -496,10 +497,25 @@ var SPE = (function () {
 		});
 		d3.select("#menu-info").on("click", function(){
 			self.clearGeneratedElements();
-			d3.select("#form").selectAll("div").data(self.selected_measurement.toString().split("\n"))
-				.enter().append("div").text(function(d){return d;})
+			d3.select("#form").selectAll("div").data(["Scatter plot meta information",""].concat(self.selected_measurement.toString().split("\n")))
+				.enter().append("div").classed("sp-info",true).append("label").html(function(row){
+					var splitRow = row.split("=[");
+					splitRow[0] = splitRow[0].replace("_", " ")
+					if(splitRow.length < 2){
+						return "<strong>" + splitRow[0] + "</strong>";
+					}
+					var output = "<strong>" + splitRow[0] + ":</strong>";
+					splitRow = splitRow.splice(1,splitRow.length);
+					output = output + splitRow.join(" ");
+					return output.substring(0,output.length-1);
+			})
 			self.hideForm(false);
 		});
+		d3.select("#menu-color-coding").on("click", function(){
+			d3.select("#canvas").classed("color-coding-off", !d3.select("#canvas").classed("color-coding-off"));
+		});
+		
+
 
 	}
 
@@ -1132,8 +1148,9 @@ var SPE = (function () {
 			.enter().append("g")
 				.classed("measurement-group", true)
 				.classed("last-selected", function(m){
-					return self.user_backwards_direction && ((self.selected_measurement && self.selected_measurement.doi == m.doi) ||
-					(self.selected_cluster_index >= 0 && self.cluster_of_clusters.getMember(self.selected_cluster_index).id == m.dbscan_cluster));
+					return self.user_backwards_direction && (
+							(self.user_position <= 1  && self.selected_cluster_index >= 0 && self.cluster_of_clusters.getMember(self.selected_cluster_index).id == m.dbscan_cluster)
+							|| (self.user_position == 2 && self.selected_measurement && self.selected_measurement.doi == m.doi));
 				}).classed("center", function(m){
 					return (self.user_position <= 1  && self.measurements[self.cluster_of_clusters.center_index.center_index].doi == measurement.doi) ||
 					(self.user_position == 2 && self.selected_cluster_index >= 0 && self.measurements[self.cluster_of_clusters.getMember(self.selected_cluster_index).center_index].doi == measurement.doi);
@@ -1149,17 +1166,18 @@ var SPE = (function () {
 			.attr("class", "pointGroup").attr("id", function(d,i){
 				return measurement.doi + "["+i+"]";
 		});
+		var preprendTitle = "";
+		if(this.user_backwards_direction && (
+			(this.user_position <= 1  && this.selected_cluster_index >= 0 && this.cluster_of_clusters.getMember(this.selected_cluster_index).id == measurement.dbscan_cluster)
+			|| (this.user_position == 2 && this.selected_measurement && this.selected_measurement.doi == measurement.doi))){
+			preprendTitle ="Last selected\n";
+		}
 		// append title for msg object to be shown
 		if(this.checkFunctionType(msgObject)){
-			if((this.selected_measurement && this.selected_measurement.doi == measurement.doi) ||
-				(this.selected_cluster_index >= 0 && this.cluster_of_clusters.getMember(this.selected_cluster_index).id == measurement.dbscan_cluster)){
-				clusterGroup.append("title").text("Last selected\n" + msgObject(measurement));
-			}else{
-				clusterGroup.append("title").text(msgObject(measurement));
-			}
+			clusterGroup.append("title").text(preprendTitle + msgObject(measurement));
 		}
 		else if(msgObject){
-			clusterGroup.append("title").text("" + msgObject);
+			clusterGroup.append("title").text(preprendTitle + msgObject);
 		}
 		// append on click function if function valid
 		if(this.checkFunctionType(onClickFun)){
@@ -1246,10 +1264,18 @@ var SPE = (function () {
 	// ---
 	SPE.prototype.plotScatterPlot = function(selector, measurement, width, height, showDetails, msgObject, onClickFun){
 		var sp = this.plotScatterPlotInline(selector, [measurement], width, height);
-		sp.svg.selectAll("rect").append("title").text("" + msgObject);
+		if(this.user_backwards_direction && (
+			(this.user_position <= 1  && this.selected_cluster_index >= 0 && this.cluster_of_clusters.getMember(this.selected_cluster_index).id == measurement.dbscan_cluster)
+			|| (this.user_position == 2 && this.selected_measurement && this.selected_measurement.doi == measurement.doi))){
+			sp.svg.selectAll("rect").append("title").text("Last selected\n" + msgObject);
+		}
+		else{
+			sp.svg.selectAll("rect").append("title").text("" + msgObject);
+		}
 		sp.svg.classed("inline",false)
-			.classed("last-selected", this.user_backwards_direction && ((this.selected_measurement && this.selected_measurement.doi == measurement.doi) ||
-					(this.selected_cluster_index >= 0 && this.cluster_of_clusters.getMember(this.selected_cluster_index).id == measurement.dbscan_cluster)))
+			.classed("last-selected", this.user_backwards_direction && (
+							(this.user_position <= 1  && this.selected_cluster_index >= 0 && this.cluster_of_clusters.getMember(this.selected_cluster_index).id == measurement.dbscan_cluster)
+							|| (this.user_position == 2 && this.selected_measurement && this.selected_measurement.doi == measurement.doi)))
 			.classed("center", (this.user_position <= 1  && this.measurements[this.cluster_of_clusters.center_index.center_index].doi == measurement.doi) ||
 								(this.user_position == 2 && this.selected_cluster_index >= 0 && this.measurements[this.cluster_of_clusters.getMember(this.selected_cluster_index).center_index].doi == measurement.doi))
 			.classed("far", (this.user_position <= 1  && this.measurements[this.cluster_of_clusters.farthest_from_center_index.center_index].doi == measurement.doi) ||
@@ -1743,13 +1769,14 @@ var Measurement = (function () {
 	// ---
 	Measurement.prototype.toString = function () {
 		return this.pairs.length + " measurements of " + this.x_axis + " X " + this.y_axis +
-				"\n DOI=[" + this.doi +"]" +
-				"\n X_range=[" + this.minX + ", " + this.maxX + "]" +
-				"\n Y_range=[" + this.minY + ", " + this.maxY + "]" +
-				"\n GPS=[" + this.longitude + ", " + this.latitude + "]" +
-				"\n TIMESTAMP=[" + this.timestamp +"]" +
-				"\n FeatureType=" + this.fv_type + "[" + this.fv.length + " features]" +
-				"\n Sources: " + [this.label_src + ".csv", this.raw_src + ".data", this.fv_type + ".fv"].join(",") + " at ID=" + this.id;
+				"\nDOI=[" + this.doi +"]" +
+				"\nX_Range=[" + this.minX + ", " + this.maxX + "]" +
+				"\nY_Range=[" + this.minY + ", " + this.maxY + "]" +
+				"\nGPS=[" + this.longitude + ", " + this.latitude + "]" +
+				"\nTimestamp=[" + this.timestamp +"]" +
+				"\nFeature_Type=[" + this.fv_type + "]" +
+				"\nFeature_vector_length=[" + this.fv.length + " features]"+
+				"\n Sources=[" + [this.label_src + ".csv", this.raw_src + ".data", this.fv_type + ".fv"].join(", ") + " at ID=" + this.id + "]";
 	}
 
 	// ---

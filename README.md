@@ -4,7 +4,7 @@ Structure:
 
 	spe/
 		csv/
-			TODO.css 	[main CSS file]	!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+			spe.css 	[main CSS file]
 
 		data/			[contains the benchmark files]
 			*.data		[raw data files]
@@ -13,10 +13,15 @@ Structure:
 			*.list		[list of files in folder to use - default file is filename.list
 
 		js/
-			d3.min.js	[the D3 engine that builds the base for SPE]
-			spe.js		[the engine of SPE]
+			d3.min.js				[the D3 engine that builds the base for SPE]
+			spe.js					[the engine of SPE]
+			spe-dbscan-worker.js	[a subset copy of spe.js functions to create a javascript worker to have animation/information during DBSCAN]
 
 		index.html		[the HTML base, where all is run]
+
+Installation
+
+	Copy the files to the document folder of your local server and run the server. The application does AJAX requests so it needs a server side. For the data information, just copy the files into the data folder according to the specifications. The file names need to be included in the used list - see data instructions.
 
 Data / benchmark folder instructions
 	
@@ -39,12 +44,25 @@ Clustering
 
 Sorting types
 
-	From Center = Center of cluster is the lowest value in array, while higher positions are defined using the distance from center. Center is found as the element with the minimum sum of all distances.
-	From Farthest = Here on the other hand we use the maximum sum of all distances to find the farthest element from center and position it similarly to center version.
-	Between Outliers = Using the farthest element we find its farthest companion, so basicly we have 2 outliers if we shrink the cluster size by 2, hence the name. Farthest element is set at lowest position, while its outlier companion is set at highest position. the remaining elements are sorted using the triangle of distances: from farthest to element, from element to companion outlier and from outlier to farthest. We project the sides of the triangle to the distance between outliers and use the part starting from farthest to element projection as a guideline for sorting.
+	1.From Center
+
+		Center of cluster is the lowest value in array, while higher positions are defined using the distance from center. Center is found as the element with the minimum sum of all distances.
+	
+	2.From Farthest
+
+		Here on the other hand we use the maximum sum of all distances to find the farthest element from center and position it similarly to center version.
+	
+	3.Between Outliers
+
+		Using the farthest element we find its farthest companion, so basicly we have 2 outliers if we shrink the cluster size by 2, hence the name. Farthest element is set at lowest position, while its outlier companion is set at highest position. the remaining elements are sorted using the triangle of distances: from farthest to element, from element to companion outlier and from outlier to farthest. We project the sides of the triangle to the distance between outliers and use the part starting from farthest to element projection as a guideline for sorting.
 
 Visualization types
 
-	Scatter plot
-	Matrix of scatter plots
-	Inline scatter plot
+	1.Scatter plot
+	2.Matrix of scatter plots
+	3.Inline scatter plot
+
+Cluster filtering
+
+	1.Clusters: Using only the cluster information.
+	2.Metadata: Using meta information, clusters are filtered by metadata
